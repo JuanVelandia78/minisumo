@@ -1,0 +1,9 @@
+CONFIG_IDF_TARGET="esp32c3"
+# Consola por el USB nativo: GPIO20/21 (UART0) se usan para BIN1/BIN2 del TB6612
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# Tick de 1 ms para un lazo de control de 5 ms preciso
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+# Si el lazo de control se traba más de 3 s, el ESP se reinicia (y los motores se apagan)
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=3

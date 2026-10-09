@@ -1,0 +1,529 @@
+<title>Cableado Minisumo RC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: una columna de "hojas de banco" — cada diagrama en su lámina, con leyenda de cables fija arriba */
+:root{
+  --bg:#eceeea; --surface:#f8f9f6; --fig:#ffffff; --fg:#17201b; --muted:#5a675f; --line:#d3d9d3;
+  --accent:#a8521d; --warn:#b3261e; --warn-bg:#fbeae7; --ok:#1d7a4f;
+  --display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  /* nets */
+  --vbat:#d3352a; --gnd:#232729; --v5:#c0267a; --v33:#e07a00; --sda:#1f5fd6; --scl:#0e9a6f;
+  --pwm:#7a3fd0; --dir:#0891b8; --enc:#5f9400; --mot:#8a5426; --int:#7d8a84;
+  /* objetos físicos */
+  --pcb-navy:#1c2f4d; --pcb-wine:#5c1a33; --pcb-blue:#1d55a0; --pcb-black:#1d2021;
+  --pcb-edge:#0c1626; --pcb-ink:#eef2f7; --pad:#d9a441; --pad-edge:#8a6420;
+  --metal:#c3c8cc; --metal-edge:#7c8388; --btn:#dfe3e6; --btn-ink:#1c1f21;
+  --tt:#f0c22e; --tt2:#e2b01c; --tt-ink:#3a2c00; --diode:#202224; --band:#d5d9dc;
+  --lipo:#34495e; --chip:#111417; --disc:#d8dcd6;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1210; --surface:#141b18; --fig:#0f1513; --fg:#e2eae5; --muted:#94a39b; --line:#29332e;
+  --accent:#e58a4f; --warn:#ff8a7d; --warn-bg:#2c1714; --ok:#5fd39a;
+  --vbat:#ff6a5c; --gnd:#c4ccd0; --v5:#f067ad; --v33:#ffa347; --sda:#6fa4ff; --scl:#3fd3a2;
+  --pwm:#b38cff; --dir:#4fcbed; --enc:#a3d94a; --mot:#d59a62; --int:#8e9b95;
+  --pcb-edge:#5d7aa3; --disc:#59625c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1210; --surface:#141b18; --fig:#0f1513; --fg:#e2eae5; --muted:#94a39b; --line:#29332e;
+  --accent:#e58a4f; --warn:#ff8a7d; --warn-bg:#2c1714; --ok:#5fd39a;
+  --vbat:#ff6a5c; --gnd:#c4ccd0; --v5:#f067ad; --v33:#ffa347; --sda:#6fa4ff; --scl:#3fd3a2;
+  --pwm:#b38cff; --dir:#4fcbed; --enc:#a3d94a; --mot:#d59a62; --int:#8e9b95;
+  --pcb-edge:#5d7aa3; --disc:#59625c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:20px;padding-block:28px 64px;display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(30px,5vw,46px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:800;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:15px;color:var(--accent);font-weight:600}
+p{margin:0;max-width:72ch}
+.muted{color:var(--muted)}
+header{display:grid;gap:12px}
+.eyebrow{font:600 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.specs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.spec{font:500 13px var(--mono);padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.spec b{color:var(--accent);font-weight:600}
+
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.rule{background:var(--warn-bg);border-left:4px solid var(--warn);padding:12px 14px;border-radius:4px;min-width:0}
+.rule strong{display:block;font-family:var(--display);font-size:16px;margin-bottom:2px}
+
+.legend{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px}
+.legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.legend i{display:inline-block;width:22px;height:4px;border-radius:2px;background:var(--c)}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--c) 0 5px,transparent 5px 9px)}
+
+section{display:grid;gap:12px}
+.fig{background:var(--fig);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.fig svg{display:block;width:100%;height:auto;min-width:680px}
+.notes{display:grid;gap:4px;margin:0;padding-left:20px;max-width:80ch}
+.notes li::marker{color:var(--accent)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+
+/* svg */
+.pcb{fill:var(--pc);stroke:var(--pcb-edge);stroke-width:1.5}
+.pad{fill:var(--pad);stroke:var(--pad-edge);stroke-width:1.5}
+.pad.f{opacity:.35}
+.pl{font:600 11px var(--mono);fill:var(--pcb-ink)}
+.pl.f{opacity:.4}
+.bt{font:800 14px var(--display);fill:var(--pcb-ink)}
+.lbl{font:500 13px var(--sans);fill:var(--fg)}
+.lbl.b{font-weight:600}
+.lbl.m{fill:var(--muted)}
+.cap{font:400 11.5px var(--sans);fill:var(--muted)}
+.note{font:600 12.5px var(--sans);fill:var(--accent)}
+.micro{font:600 8px var(--mono);fill:var(--btn-ink)}
+.halo{fill:none;stroke:var(--fig);stroke-width:10;stroke-linecap:round;stroke-linejoin:round}
+.w{fill:none;stroke:var(--c);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.w.dash{stroke-dasharray:7 6}
+.dot{fill:var(--c);stroke:var(--fig);stroke-width:2}
+.tag{fill:var(--fig);stroke:var(--c);stroke-width:2}
+.tagt{font:600 12px var(--sans);fill:var(--fg)}
+.metal{fill:var(--metal);stroke:var(--metal-edge)}
+.btn{fill:var(--btn);stroke:var(--metal-edge)}
+.chip{fill:var(--chip);stroke:#000}
+.chipt{font:600 9px var(--mono);fill:#cfd6dd}
+.ant{fill:#e9e4d6;stroke:#9c937a}
+.lead{stroke:var(--fg);stroke-width:2;fill:none}
+.plate{stroke:var(--fg);stroke-width:3.5}
+.platef{fill:var(--fg)}
+.diode{fill:var(--diode);stroke:#000}
+.band{fill:var(--band)}
+.tt{fill:var(--tt);stroke:#a9850f}
+.tt2{fill:var(--tt2);stroke:#a9850f}
+.shaft{fill:#fafafa;stroke:#888}
+.ttt{font:600 12px var(--sans);fill:var(--tt-ink)}
+.lipo{fill:var(--lipo);stroke:#1a2633}
+.sw{fill:#2a2d30;stroke:#000}
+.rocker{fill:#c8312a}
+.trim{fill:#2f6fd6;stroke:#173a73}
+.trimc{fill:#e9eef5}
+.disc{fill:var(--disc);stroke:var(--muted);stroke-width:1}
+.slot{stroke:var(--fig);stroke-width:3}
+.housing{fill:#151718;stroke:#000}
+.dashl{stroke:var(--muted);stroke-width:2;stroke-dasharray:3 4;fill:none}
+
+table{border-collapse:collapse;width:100%;font-size:14px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:10px;min-width:0}
+.card h3{font-size:17px}
+.card.bad{border-top:4px solid var(--warn)}
+.card.good{border-top:4px solid var(--ok)}
+.chk{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.chk input{margin-top:4px;width:17px;height:17px;accent-color:var(--accent);flex:none}
+.chk input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chk input:checked + span{color:var(--muted);text-decoration:line-through}
+ol.steps{margin:0;padding-left:22px;display:grid;gap:8px;max-width:80ch}
+ol.steps li::marker{font-family:var(--mono);color:var(--accent);font-weight:600}
+.reset{justify-self:start;font:500 13px var(--sans);background:none;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:6px 12px;cursor:pointer}
+.reset:focus-visible{outline:2px solid var(--accent)}
+@media (max-width:520px){.wrap{padding-inline:16px}h2{font-size:21px}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Práctica 2 · Robot minisumo teleoperado</div>
+  <h1>Cableado del minisumo</h1>
+  <p class="muted">Conexiones físicas del robot (ESP32-C3 Super Mini, TB6612FNG, LM2596, MPU-6050 y dos encoders de herradura) y del control remoto (ESP32 + MPU-6050). Cada color de cable es una misma señal en todos los diagramas.</p>
+  <div class="specs">
+    <span class="spec">Batería <b>LiPo 2S 7,4 V</b> (8,4 V llena)</span>
+    <span class="spec">LM2596 → <b>5,2 V</b></span>
+    <span class="spec">Diodo <b>1N5819</b></span>
+    <span class="spec">PWM máx. <b>70 %</b></span>
+  </div>
+</header>
+
+<div class="rules">
+  <div class="rule"><strong>El pin 3V3 es una salida</strong>Nunca le metas voltaje. Solo alimenta la lógica de los módulos.</div>
+  <div class="rule"><strong>LM2596 calibrada primero</strong>Ajusta 5,2 V con el multímetro antes de conectar el ESP. Sin calibrar puede dar 8,4 V y quema la placa.</div>
+  <div class="rule"><strong>Sensores a 3V3, no a 5 V</strong>Su salida D0 sube hasta su VCC y el ESP32-C3 no tolera 5 V.</div>
+  <div class="rule"><strong>TB6612: VCC ≠ VM</strong>VCC va a 3V3. Solo VM va a la batería.</div>
+</div>
+
+<div class="legend" aria-label="Colores de cable">
+  <span><i style="--c:var(--vbat)"></i>VBAT (cable rojo)</span>
+  <span><i style="--c:var(--gnd)"></i>GND (cable negro)</span>
+  <span><i style="--c:var(--v5)"></i>5 V</span>
+  <span><i style="--c:var(--v33)"></i>3V3</span>
+  <span><i style="--c:var(--sda)"></i>SDA</span>
+  <span><i style="--c:var(--scl)"></i>SCL</span>
+  <span><i style="--c:var(--pwm)"></i>PWM</span>
+  <span><i style="--c:var(--dir)"></i>Dirección (IN1/IN2)</span>
+  <span><i style="--c:var(--enc)"></i>Encoder</span>
+  <span><i style="--c:var(--mot)"></i>Motor</span>
+  <span><i class="dash" style="--c:var(--int)"></i>Opcional</span>
+</div>
+
+<section id="pines">
+  <h2><span class="n">01</span>Mapa de pines del ESP32-C3 Super Mini</h2>
+  <p class="muted">Qué va en cada pin. Se guía por el número impreso junto al pin, no por la posición: algunas versiones de la placa traen los lados invertidos, y GPIO20/21 pueden venir marcados como RX/TX.</p>
+  <div class="fig" id="d1"></div>
+</section>
+
+<section id="potencia">
+  <h2><span class="n">02</span>Potencia</h2>
+  <p class="muted">La batería pasa por el interruptor y se reparte en dos ramas: VM del TB6612 (motores) y la LM2596, que baja a 5,2 V y alimenta al ESP a través del diodo.</p>
+  <div class="fig" id="d2"></div>
+  <ul class="notes">
+    <li>El interruptor va en serie con el positivo. No lleva pull-up ni pull-down. El negativo no pasa por él.</li>
+    <li>El capacitor de 470 µF va pegado a los pines VM y GND del TB6612: pata larga (+) a VM, franja (−) a GND.</li>
+    <li>Cable de 22–24 AWG en batería, interruptor, VM y motores. El retorno de los motores va directo al negativo de la batería, no a través del ESP.</li>
+  </ul>
+</section>
+
+<section id="rieles">
+  <h2><span class="n">03</span>Riel 3V3 y GND común</h2>
+  <p class="muted">Todo lo que se alimenta a 3,3 V sale del pin 3V3 del ESP. Todas las tierras son una sola.</p>
+  <div class="fig" id="d3"></div>
+</section>
+
+<section id="motores">
+  <h2><span class="n">04</span>ESP32-C3 → TB6612FNG → motores</h2>
+  <p class="muted">Un PWM y dos pines de dirección por motor. Las etiquetas en los extremos indican a qué riel va cada cable.</p>
+  <div class="fig" id="d4"></div>
+  <ul class="notes">
+    <li>Suelda un capacitor cerámico <b>103 (10 nF)</b> directamente entre los dos terminales de cada motor, con las patas lo más cortas posible.</li>
+    <li>STBY a 3V3 deja el driver siempre habilitado. La parada se controla por software.</li>
+  </ul>
+  <div class="card">
+    <h3>Capacitores cerámicos: cómo leer el código</h3>
+    <p class="muted">Los dos primeros dígitos son el valor y el tercero es la cantidad de ceros, en picofaradios. No tienen polaridad: da igual cómo los sueldes.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Código</th><th>Valor</th><th>Dónde va en este robot</th></tr></thead>
+      <tbody>
+        <tr><td class="num">104</td><td class="num">100 nF</td><td>El valor típico, pero no es obligatorio</td></tr>
+        <tr><td class="num">103</td><td class="num">10 nF</td><td><b>Uno en cada motor</b> (los 2 que tienes)</td></tr>
+        <tr><td class="num">102</td><td class="num">1 nF</td><td><b>En VM del TB6612</b>, en paralelo con el de 470 µF</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted">Las escobillas de los motores generan ruido de alta frecuencia (MHz). Para eso un 10 nF funciona bien. El de 470 µF hace casi todo el trabajo en VM, así que el 1 nF ahí es un complemento. Si después consigues 104, puedes cambiarlos, pero el robot funciona con estos.</p>
+  </div>
+</section>
+
+<section id="imu">
+  <h2><span class="n">05</span>ESP32-C3 → MPU-6050 (GY-521)</h2>
+  <p class="muted">Bus I2C en GPIO8 (SDA) y GPIO9 (SCL). AD0 a GND fija la dirección 0x68.</p>
+  <div class="fig" id="d5"></div>
+  <ul class="notes">
+    <li>Fija la IMU al chasis, cerca del centro entre las ruedas, con X hacia adelante y Z hacia arriba.</li>
+    <li>El GY-521 ya trae las resistencias pull-up del I2C. No hace falta agregar otras.</li>
+  </ul>
+</section>
+
+<section id="encoders">
+  <h2><span class="n">06</span>ESP32-C3 → sensores de herradura</h2>
+  <p class="muted">El disco ranurado (20 ranuras) va en el eje trasero del motor TT y gira dentro de la ranura del sensor.</p>
+  <div class="fig" id="d6"></div>
+  <ul class="notes">
+    <li>Si tu módulo tiene 4 pines, A0 queda sin conectar. Si tiene 3, solo usa VCC, GND y D0 (a veces marcado OUT).</li>
+  </ul>
+</section>
+
+<section id="control">
+  <h2><span class="n">07</span>Control remoto: ESP32 DevKit + MPU-6050</h2>
+  <p class="muted">Solo cuatro cables. Se alimenta por USB desde un power bank o el PC.</p>
+  <div class="fig" id="d7"></div>
+  <ul class="notes">
+    <li>En la DevKit, ubica 3V3, GND, GPIO21 y GPIO22 por la serigrafía: su posición cambia entre modelos de 30 y 38 pines.</li>
+  </ul>
+</section>
+
+<section id="materiales">
+  <h2><span class="n">08</span>Materiales del robot</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Componente</th><th>Cant.</th><th>Uso</th></tr></thead>
+    <tbody>
+      <tr><td>Batería LiPo 2S 7,4 V</td><td class="num">1</td><td>Alimentación general</td></tr>
+      <tr><td>Interruptor ≥ 2 A a 12 V (KCD11, MTS-102)</td><td class="num">1</td><td>Encendido y apagado</td></tr>
+      <tr><td>Regulador LM2596 calibrado a 5,2 V</td><td class="num">1</td><td>5 V para el ESP32-C3</td></tr>
+      <tr><td>Diodo Schottky 1N5819</td><td class="num">1</td><td>Protección al conectar el USB</td></tr>
+      <tr><td>ESP32-C3 Super Mini</td><td class="num">1</td><td>Microcontrolador del robot</td></tr>
+      <tr><td>Puente H TB6612FNG</td><td class="num">1</td><td>Driver de los motores</td></tr>
+      <tr><td>Capacitor electrolítico 470 µF / 16 V</td><td class="num">1</td><td>VM del TB6612</td></tr>
+      <tr><td>Capacitor cerámico 103 (10 nF)</td><td class="num">2</td><td>Uno en cada motor</td></tr>
+      <tr><td>Capacitor cerámico 102 (1 nF)</td><td class="num">1</td><td>VM del TB6612, junto al de 470 µF</td></tr>
+      <tr><td>Motorreductor TT (amarillo)</td><td class="num">2</td><td>Tracción</td></tr>
+      <tr><td>Disco ranurado de 20 ranuras</td><td class="num">2</td><td>Encoders</td></tr>
+      <tr><td>Sensor de herradura digital</td><td class="num">2</td><td>Encoders</td></tr>
+      <tr><td>MPU-6050 (GY-521)</td><td class="num">1</td><td>IMU</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="verificar">
+  <h2><span class="n">09</span>Verificación con el multímetro</h2>
+  <p class="muted">Con todo desconectado y el multímetro en modo continuidad. Las marcas se guardan en este navegador.</p>
+  <div class="checks">
+    <div class="card bad">
+      <h3>No debe pitar (debe marcar OL)</h3>
+      <label class="chk"><input type="checkbox" id="c1"><span>VBAT ↔ GND</span></label>
+      <label class="chk"><input type="checkbox" id="c2"><span>VBAT ↔ 3V3</span></label>
+      <label class="chk"><input type="checkbox" id="c3"><span>5V del ESP ↔ 3V3</span></label>
+      <label class="chk"><input type="checkbox" id="c4"><span>3V3 ↔ GND</span></label>
+    </div>
+    <div class="card good">
+      <h3>Sí debe pitar</h3>
+      <label class="chk"><input type="checkbox" id="c5"><span>Salida del interruptor ↔ LM2596 IN+ ↔ TB6612 VM</span></label>
+      <label class="chk"><input type="checkbox" id="c6"><span>LM2596 OUT+ ↔ ánodo del 1N5819</span></label>
+      <label class="chk"><input type="checkbox" id="c7"><span>Cátodo del 1N5819 ↔ ESP 5V</span></label>
+      <label class="chk"><input type="checkbox" id="c8"><span>ESP 3V3 ↔ TB6612 VCC y STBY ↔ MPU VCC ↔ VCC de los sensores</span></label>
+      <label class="chk"><input type="checkbox" id="c9"><span>Batería (−) ↔ todos los GND y AD0 del MPU</span></label>
+      <label class="chk"><input type="checkbox" id="c10"><span>Cada GPIO con su pin de destino (diagrama 01)</span></label>
+    </div>
+  </div>
+  <button class="reset" id="resetChecks" type="button">Borrar marcas</button>
+</section>
+
+<section id="encendido">
+  <h2><span class="n">10</span>Primer encendido, en este orden</h2>
+  <ol class="steps">
+    <li>Conecta solo la batería, el interruptor y la LM2596. Calibra la salida a <b>5,2 V</b>.</li>
+    <li>Agrega el diodo. En el cátodo debes medir unos <b>4,9 V</b>. Todavía sin el ESP.</li>
+    <li>Apaga, conecta el ESP32-C3 y enciende. En su pin 3V3 debes medir <b>3,3 V</b>.</li>
+    <li>Agrega un módulo a la vez (MPU, sensores, TB6612). Apaga antes de cada uno y repite las medidas.</li>
+    <li>Los motores al final, con las ruedas en el aire y PWM bajo. En el código, nunca más de 70 %.</li>
+    <li>Para programar por USB, apaga el interruptor de la batería.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+function E(tag,a,parent,txt){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;if(parent)parent.appendChild(e);return e;}
+function mk(id,w,h,label){
+  const host=document.getElementById(id);
+  const s=E('svg',{viewBox:`0 0 ${w} ${h}`,role:'img','aria-label':label});
+  host.appendChild(s);
+  const g={B:E('g',{},s),W:E('g',{},s),P:E('g',{},s),T:E('g',{},s)};
+  return {g,
+    board(x,y,w,h,kind){E('rect',{x,y,width:w,height:h,rx:8,class:'pcb',style:`--pc:var(--pcb-${kind})`},g.B);},
+    pad(x,y,label,side,faded){E('circle',{cx:x,cy:y,r:6,class:'pad'+(faded?' f':'')},g.P);
+      if(label){const L=side==='l';E('text',{x:x+(L?13:-13),y:y+4,class:'pl'+(faded?' f':''),'text-anchor':L?'start':'end'},g.T,label);}},
+    wire(pts,net,dash){const p=pts.map(q=>q.join(',')).join(' ');
+      E('polyline',{points:p,class:'halo'},g.W);
+      E('polyline',{points:p,class:'w'+(dash?' dash':''),style:`--c:var(--${net})`},g.W);},
+    dot(x,y,net){E('circle',{cx:x,cy:y,r:5,class:'dot',style:`--c:var(--${net})`},g.P);},
+    tag(x,y,txt,net,anchor){const w=txt.length*7+18;const x0=anchor==='end'?x-w:anchor==='middle'?x-w/2:x;
+      E('rect',{x:x0,y:y-11,width:w,height:22,rx:11,class:'tag',style:`--c:var(--${net})`},g.T);
+      E('text',{x:x0+w/2,y:y+4,'text-anchor':'middle',class:'tagt'},g.T,txt);},
+    text(x,y,txt,cls,anchor){return E('text',{x,y,class:cls||'lbl','text-anchor':anchor||'start'},g.T,txt);}
+  };
+}
+function cap(d,x,y1,y2,elec){const m=(y1+y2)/2;
+  E('line',{x1:x,y1:y1,x2:x,y2:m-5,class:'lead'},d.g.W);E('line',{x1:x,y1:m+5,x2:x,y2:y2,class:'lead'},d.g.W);
+  E('line',{x1:x-11,y1:m-5,x2:x+11,y2:m-5,class:'plate'},d.g.W);
+  if(elec){E('rect',{x:x-11,y:m+3,width:22,height:5,class:'platef'},d.g.W);d.text(x-14,m-8,'+','cap','end');}
+  else E('line',{x1:x-11,y1:m+5,x2:x+11,y2:m+5,class:'plate'},d.g.W);}
+function diode(d,x1,x2,y){E('rect',{x:x1,y:y-9,width:x2-x1,height:18,rx:4,class:'diode'},d.g.P);
+  E('rect',{x:x2-14,y:y-9,width:6,height:18,class:'band'},d.g.P);}
+function motor(d,x,y,w,h,label){E('rect',{x,y,width:w,height:h,rx:6,class:'tt'},d.g.B);
+  E('rect',{x:x+w-62,y:y+6,width:54,height:h-12,rx:4,class:'tt2'},d.g.B);
+  E('circle',{cx:x+w-35,cy:y+h/2,r:9,class:'shaft'},d.g.B);
+  E('text',{x:x+16,y:y+h/2+4,class:'ttt'},d.g.T,label);}
+function horseshoe(d,x,y,cy){d.board(x,y,160,115,'black');
+  E('circle',{cx:x-12,cy,r:42,class:'disc'},d.g.B);
+  for(let k=0;k<20;k++){const a=k*Math.PI/10,c=Math.cos(a),s=Math.sin(a);
+    E('line',{x1:x-12+c*31,y1:cy+s*31,x2:x-12+c*39,y2:cy+s*39,class:'slot'},d.g.B);}
+  E('circle',{cx:x-12,cy,r:5,class:'shaft'},d.g.B);
+  E('rect',{x:x+10,y:cy-43,width:40,height:30,rx:3,class:'housing'},d.g.B);
+  E('rect',{x:x+10,y:cy+13,width:40,height:30,rx:3,class:'housing'},d.g.B);}
+function esp(d,x,y,h,opts){ // Super Mini: pads at 12px from edges
+  d.board(x,y,120,h,'navy');
+  E('rect',{x:x+42,y:y-12,width:36,height:26,rx:6,class:'metal'},d.g.B);
+  const L=['5V','G','3.3','4','3','2','1','0'],R=['5','6','7','8','9','10','20','21'];
+  opts.ys.forEach((yy,i)=>{d.pad(x+12,yy,L[i],'l',!opts.left.includes(L[i]));d.pad(x+108,yy,R[i],'r',!opts.right.includes(R[i]));});
+}
+
+/* 01 · mapa de pines */
+(()=>{const d=mk('d1',820,400,'Mapa de pines del ESP32-C3 Super Mini');
+  d.text(410,18,'Vista superior · componentes hacia ti · USB arriba','cap','middle');
+  d.board(330,50,160,330,'navy');
+  E('rect',{x:380,y:34,width:60,height:30,rx:7,class:'metal'},d.g.B);
+  E('rect',{x:346,y:68,width:30,height:16,rx:3,class:'btn'},d.g.B);
+  E('rect',{x:444,y:68,width:30,height:16,rx:3,class:'btn'},d.g.B);
+  d.text(361,79,'BOOT','micro','middle');d.text(459,79,'RST','micro','middle');
+  E('rect',{x:382,y:178,width:56,height:56,rx:3,class:'chip'},d.g.B);
+  E('text',{x:410,y:210,class:'chipt','text-anchor':'middle'},d.g.B,'ESP32-C3');
+  E('rect',{x:388,y:350,width:44,height:18,rx:2,class:'ant'},d.g.B);
+  const L=[['5V','v5','Cátodo del 1N5819 (≈ 4,9 V)'],['G','gnd','GND común'],['3.3','v33','Riel 3V3 (es SALIDA)'],['4','enc','Sensor derecho · D0'],
+           ['3','enc','Sensor izquierdo · D0'],['2',null,'No conectar (pin de arranque)'],['1','int','MPU-6050 · INT (opcional)'],['0',null,'Libre']];
+  const R=[['5','pwm','TB6612 · PWMA'],['6','dir','TB6612 · AIN1'],['7','dir','TB6612 · AIN2'],['8','sda','MPU-6050 · SDA'],
+           ['9','scl','MPU-6050 · SCL'],['10','pwm','TB6612 · PWMB'],['20','dir','TB6612 · BIN1'],['21','dir','TB6612 · BIN2']];
+  L.forEach(([p,n,t],i)=>{const y=100+i*34;d.pad(344,y,p,'l',!n);
+    if(n){d.wire([[344,y],[296,y]],n,n==='int');d.text(288,y+4,t,'lbl','end');}
+    else{E('line',{x1:336,y1:y,x2:296,y2:y,class:'dashl'},d.g.W);d.text(288,y+4,t,'lbl m','end');}});
+  R.forEach(([p,n,t],i)=>{const y=100+i*34;d.pad(476,y,p,'r');d.wire([[476,y],[524,y]],n);d.text(532,y+4,t,'lbl','start');});
+})();
+
+/* 02 · potencia */
+(()=>{const d=mk('d2',1080,500,'Diagrama de potencia');
+  // batería
+  E('rect',{x:30,y:120,width:150,height:120,rx:10,class:'lipo'},d.g.B);
+  d.text(95,168,'LiPo 2S','bt','middle');d.text(95,188,'7,4 V','pl','middle');d.text(95,204,'8,4 V llena','pl','middle');
+  E('rect',{x:62,y:240,width:28,height:10,rx:2,class:'btn'},d.g.B);
+  d.text(40,272,'balanceo: sin conectar','cap');
+  d.pad(180,160,'+','r');d.pad(180,210,'−','r');
+  // interruptor
+  E('rect',{x:240,y:140,width:60,height:40,rx:6,class:'sw'},d.g.B);E('rect',{x:252,y:148,width:36,height:24,rx:4,class:'rocker'},d.g.B);
+  d.pad(240,160);d.pad(300,160);d.text(270,128,'Interruptor ≥ 2 A','lbl b','middle');
+  // LM2596
+  d.board(470,100,200,120,'blue');
+  E('rect',{x:592,y:106,width:16,height:16,rx:2,class:'trim'},d.g.B);E('circle',{cx:600,cy:114,r:4,class:'trimc'},d.g.B);
+  d.text(570,160,'LM2596','bt','middle');d.text(570,180,'salida 5,2 V','pl','middle');
+  d.pad(470,135,'IN+','l');d.pad(470,185,'IN−','l');d.pad(670,135,'OUT+','r');d.pad(670,185,'OUT−','r');
+  d.text(570,88,'Calibrar a 5,2 V antes de conectar el ESP','note','middle');
+  // TB6612 (potencia)
+  d.board(470,300,200,100,'wine');
+  d.text(585,345,'TB6612FNG','bt','middle');d.text(585,365,'lógica y motores en 04','pl','middle');
+  d.pad(470,330,'VM','l');d.pad(470,370,'GND','l');
+  // ESP
+  d.board(830,80,100,260,'navy');E('rect',{x:858,y:66,width:44,height:26,rx:6,class:'metal'},d.g.B);
+  d.pad(842,135,'5V','l');d.pad(842,170,'G','l');d.pad(842,205,'3.3','l');
+  d.text(880,285,'ESP32-C3','bt','middle');d.text(880,303,'Super Mini','pl','middle');
+  d.text(944,112,'USB: solo para','cap');d.text(944,128,'programar, con el','cap');d.text(944,144,'interruptor apagado','cap');
+  // cables
+  d.wire([[180,160],[240,160]],'vbat');
+  d.wire([[300,160],[360,160],[360,135],[470,135]],'vbat');
+  d.wire([[360,160],[360,330],[470,330]],'vbat');d.dot(360,160,'vbat');
+  d.text(372,205,'VBAT','lbl b');d.text(372,221,'6,6–8,4 V','cap');
+  d.wire([[180,210],[205,210],[205,460],[805,460]],'gnd');
+  d.wire([[670,185],[700,185],[700,460]],'gnd');
+  d.wire([[470,185],[450,185],[450,250],[700,250]],'gnd');d.dot(700,250,'gnd');d.dot(700,460,'gnd');
+  d.wire([[470,370],[400,370]],'gnd');d.wire([[420,370],[420,460]],'gnd');d.dot(420,460,'gnd');d.dot(420,370,'gnd');
+  cap(d,400,330,370,true);cap(d,440,330,370,false);d.dot(400,330,'vbat');d.dot(440,330,'vbat');d.dot(440,370,'gnd');
+  d.text(378,348,'470 µF electrolítico','cap','end');d.text(378,364,'102 (1 nF) cerámico','cap','end');
+  d.wire([[670,135],[722,135]],'v5');d.wire([[778,135],[842,135]],'v5');diode(d,722,778,135);
+  d.text(750,116,'1N5819','lbl b','middle');d.text(728,160,'ánodo','cap','middle');d.text(774,160,'cátodo','cap','middle');
+  d.text(750,176,'la franja va hacia el ESP','cap','middle');
+  d.wire([[842,170],[805,170],[805,460]],'gnd');
+  d.wire([[842,205],[822,205],[822,370],[950,370]],'v33');d.tag(954,370,'3V3 → ver 03','v33','start');
+  d.text(215,484,'GND común (cable negro)','cap');
+})();
+
+/* 03 · rieles */
+(()=>{const d=mk('d3',1000,320,'Riel 3V3 y GND común');
+  d.tag(20,60,'ESP32-C3 · pin 3V3','v33','start');
+  d.wire([[176,60],[960,60]],'v33');d.text(200,44,'Riel 3V3: sale del ESP32-C3, no le entra nada','lbl b');
+  [[280,'TB6612 · VCC'],[430,'TB6612 · STBY'],[580,'MPU-6050 · VCC'],[730,'Sensor izq. · VCC'],[880,'Sensor der. · VCC']]
+    .forEach(([x,t])=>{d.wire([[x,60],[x,104]],'v33');d.dot(x,60,'v33');d.tag(x,115,t,'v33','middle');});
+  d.tag(20,190,'Batería (−)','gnd','start');
+  d.wire([[129,190],[960,190]],'gnd');d.text(200,174,'GND común: una sola tierra para todo','lbl b');
+  [[280,232,'LM2596 IN− y OUT−'],[460,232,'TB6612 GND ×3'],[640,232,'ESP32-C3 GND'],[820,232,'MPU-6050 GND'],
+   [370,282,'MPU-6050 AD0'],[550,282,'Sensor izq. GND'],[730,282,'Sensor der. GND'],[910,282,'Capacitores (−)']]
+    .forEach(([x,y,t])=>{d.wire([[x,190],[x,y-11]],'gnd');d.dot(x,190,'gnd');d.tag(x,y,t,'gnd','middle');});
+})();
+
+/* 04 · motores */
+(()=>{const d=mk('d4',1080,420,'ESP32-C3, TB6612FNG y motores');
+  esp(d,70,50,300,{ys:[100,130,160,190,220,250,280,310],left:[],right:['5','6','7','10','20','21']});
+  d.text(130,374,'ESP32-C3 Super Mini','lbl b','middle');
+  d.board(470,50,200,350,'wine');
+  E('rect',{x:545,y:250,width:50,height:50,rx:3,class:'chip'},d.g.B);
+  d.text(570,225,'TB6612FNG','bt','middle');
+  const LT=['PWMA','AIN2','AIN1','STBY','BIN1','BIN2','PWMB','GND'],RT=['VM','VCC','GND','AO1','AO2','BO2','BO1','GND'];
+  LT.forEach((t,i)=>d.pad(482,90+i*40,t,'l'));RT.forEach((t,i)=>d.pad(658,90+i*40,t,'r'));
+  d.wire([[178,100],[300,100],[300,90],[482,90]],'pwm');
+  d.wire([[178,130],[340,130],[340,170],[482,170]],'dir');
+  d.wire([[178,160],[380,160],[380,130],[482,130]],'dir');
+  d.wire([[178,250],[250,250],[250,330],[482,330]],'pwm');
+  d.wire([[178,280],[330,280],[330,250],[482,250]],'dir');
+  d.wire([[178,310],[400,310],[400,290],[482,290]],'dir');
+  d.wire([[482,210],[445,210]],'v33');d.tag(441,210,'3V3','v33','end');
+  d.wire([[482,370],[445,370]],'gnd');d.tag(441,370,'GND','gnd','end');
+  d.wire([[658,90],[700,90]],'vbat');d.tag(704,90,'VBAT','vbat','start');
+  d.wire([[658,130],[700,130]],'v33');d.tag(704,130,'3V3','v33','start');
+  d.wire([[658,170],[700,170]],'gnd');d.tag(704,170,'GND','gnd','start');
+  d.wire([[658,370],[700,370]],'gnd');d.tag(704,370,'GND','gnd','start');
+  motor(d,840,195,170,70,'Motor izq. · A');motor(d,840,275,170,70,'Motor der. · B');
+  [210,250,290,330].forEach(y=>d.wire([[658,y],[840,y]],'mot'));
+  [210,250,290,330].forEach(y=>d.pad(840,y));
+  cap(d,790,210,250,false);cap(d,790,290,330,false);
+  [210,250,290,330].forEach(y=>d.dot(790,y,'mot'));
+  d.text(776,234,'103 (10 nF)','cap','end');d.text(776,314,'103 (10 nF)','cap','end');
+  d.text(470,30,'PWM máximo 70 % en el código (motores de 6 V, batería hasta 8,4 V)','note');
+  d.text(840,384,'Si un motor gira al revés,','cap');d.text(840,400,'intercambia sus dos cables.','cap');
+})();
+
+/* 05 · MPU */
+(()=>{const d=mk('d5',860,410,'ESP32-C3 y MPU-6050');
+  esp(d,140,40,300,{ys:[90,118,146,174,202,230,258,286],left:['1'],right:['8','9']});
+  d.text(200,398,'ESP32-C3 Super Mini','lbl b','middle');
+  d.board(480,70,200,260,'blue');
+  d.text(590,94,'GY-521','bt','middle');
+  E('rect',{x:565,y:125,width:50,height:50,rx:3,class:'chip'},d.g.B);
+  E('text',{x:590,y:154,class:'chipt','text-anchor':'middle'},d.g.B,'MPU-6050');
+  E('line',{x1:580,y1:270,x2:630,y2:270,class:'lead',style:'stroke:var(--pcb-ink)'},d.g.B);
+  E('line',{x1:580,y1:270,x2:580,y2:225,class:'lead',style:'stroke:var(--pcb-ink)'},d.g.B);
+  d.text(640,274,'X','pl');d.text(580,218,'Y','pl','middle');
+  d.text(590,318,'XDA y XCL sin conectar','pl','middle');
+  ['VCC','GND','SCL','SDA','XDA','XCL','AD0','INT'].forEach((t,i)=>d.pad(492,100+i*30,t,'l',t==='XDA'||t==='XCL'));
+  d.wire([[248,174],[400,174],[400,190],[492,190]],'sda');
+  d.wire([[248,202],[360,202],[360,160],[492,160]],'scl');
+  d.wire([[152,258],[110,258],[110,372],[440,372],[440,310],[492,310]],'int',true);
+  d.text(275,366,'INT (opcional)','cap','middle');
+  d.wire([[492,100],[450,100]],'v33');d.tag(446,100,'3V3','v33','end');
+  d.wire([[492,130],[450,130]],'gnd');d.tag(446,130,'GND','gnd','end');
+  d.wire([[492,280],[450,280]],'gnd');d.tag(446,280,'GND','gnd','end');
+  d.text(270,168,'SDA','lbl b');d.text(270,224,'SCL','lbl b');
+})();
+
+/* 06 · encoders */
+(()=>{const d=mk('d6',860,360,'ESP32-C3 y sensores de herradura');
+  esp(d,420,40,280,{ys:[90,118,146,174,202,230,258,286],left:['4','3'],right:[]});
+  d.text(480,345,'ESP32-C3 Super Mini','lbl b','middle');
+  horseshoe(d,100,55,105);horseshoe(d,100,195,245);
+  d.text(190,46,'Sensor derecho','lbl b','middle');d.text(190,188,'Sensor izquierdo','lbl b','middle');
+  [[80,104,128,152],[220,244,268,292]].forEach(ys=>{['VCC','GND','D0','A0'].forEach((t,i)=>d.pad(248,ys[i],t,'r',t==='A0'));});
+  d.wire([[248,128],[330,128],[330,174],[432,174]],'enc');
+  d.wire([[248,268],[350,268],[350,202],[432,202]],'enc');
+  d.wire([[248,80],[290,80]],'v33');d.tag(294,80,'3V3','v33','start');
+  d.wire([[248,104],[290,104]],'gnd');d.tag(294,104,'GND','gnd','start');
+  d.wire([[248,220],[290,220]],'v33');d.tag(294,220,'3V3','v33','start');
+  d.wire([[248,244],[290,244]],'gnd');d.tag(294,244,'GND','gnd','start');
+  d.text(88,330,'disco de 20 ranuras','cap','middle');
+  d.text(380,166,'GPIO4','lbl b','middle');d.text(392,224,'GPIO3','lbl b','middle');
+})();
+
+/* 07 · control */
+(()=>{const d=mk('d7',860,390,'Control remoto ESP32 DevKit y MPU-6050');
+  d.board(110,30,160,300,'black');
+  const used={90:'3V3',130:'GND',170:'GPIO21',210:'GPIO22'};
+  for(let y=50;y<=310;y+=20){d.pad(122,y,null,'l',true);if(!used[y])d.pad(258,y,null,'r',true);}
+  Object.entries(used).forEach(([y,t])=>d.pad(258,+y,t,'r'));
+  E('rect',{x:140,y:228,width:80,height:62,rx:3,class:'metal'},d.g.B);
+  d.text(180,264,'ESP32','micro','middle');
+  E('rect',{x:170,y:322,width:40,height:24,rx:5,class:'metal'},d.g.B);
+  d.text(190,312,'ESP32 DevKit','bt','middle');
+  d.text(190,372,'USB → power bank o PC','cap','middle');
+  d.board(480,60,200,260,'blue');d.text(590,84,'GY-521','bt','middle');
+  E('rect',{x:565,y:115,width:50,height:50,rx:3,class:'chip'},d.g.B);
+  E('text',{x:590,y:144,class:'chipt','text-anchor':'middle'},d.g.B,'MPU-6050');
+  ['VCC','GND','SCL','SDA','XDA','XCL','AD0','INT'].forEach((t,i)=>d.pad(492,90+i*30,t,'l',['XDA','XCL','INT'].includes(t)));
+  d.text(590,308,'XDA, XCL e INT sin conectar','pl','middle');
+  d.wire([[258,90],[492,90]],'v33');
+  d.wire([[258,130],[380,130],[380,120],[492,120]],'gnd');
+  d.wire([[258,170],[420,170],[420,180],[492,180]],'sda');
+  d.wire([[258,210],[400,210],[400,150],[492,150]],'scl');
+  d.wire([[492,270],[450,270]],'gnd');d.tag(446,270,'GND','gnd','end');
+  d.text(310,84,'3V3','lbl b');d.text(310,164,'SDA','lbl b');d.text(310,204,'SCL','lbl b');d.text(310,124,'GND','lbl b');
+})();
+
+/* checklist */
+(()=>{const boxes=[...document.querySelectorAll('.chk input')];
+  const K='minisumo-check-';
+  boxes.forEach(b=>{try{b.checked=localStorage.getItem(K+b.id)==='1';}catch(e){}
+    b.addEventListener('change',()=>{try{localStorage.setItem(K+b.id,b.checked?'1':'0');}catch(e){}});});
+  document.getElementById('resetChecks').addEventListener('click',()=>{boxes.forEach(b=>{b.checked=false;try{localStorage.removeItem(K+b.id);}catch(e){}});});
+})();
+</script>

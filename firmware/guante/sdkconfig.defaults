@@ -1,0 +1,3 @@
+CONFIG_IDF_TARGET="esp32"
+# Tick de 1 ms para un muestreo de 10 ms preciso
+CONFIG_FREERTOS_HZ=1000
