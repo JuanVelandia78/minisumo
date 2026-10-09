@@ -1,11 +1,4 @@
-# Informe de laboratorio — Práctica 2: Robot minisumo teleoperado
-
-**Asignatura:** Procesamiento de Señales
-**Práctica:** 2. Filtrado digital. Parte 3: construcción del robot minisumo teleoperado con ROS2
-**Integrantes:** ⟨completar⟩
-**Fecha:** ⟨completar⟩
-
-> Los campos marcados con **⟨completar⟩** dependen de mediciones experimentales del equipo y deben llenarse con los datos reales. Todo lo demás describe el diseño, la implementación y las pruebas hechas durante el desarrollo.
+# Minisumo
 
 ---
 
@@ -26,7 +19,7 @@ En el PC, un paquete de ROS2 hace cinco cosas:
 - ejecuta rutinas de movimiento conocidas;
 - permite manejar el robot con un guante (ESP32 + MPU-6050) que mide la inclinación de la mano con un filtro complementario.
 
-El informe documenta el diseño, el tratamiento de las señales, la estrategia de control, los problemas encontrados en la integración y cómo se resolvieron, y el experimento de posición final.
+El informe documenta el diseño, el tratamiento de las señales, la estrategia de control, los problemas encontrados en la integración y cómo se resolvieron, y el procedimiento preparado para el experimento de posición final.
 
 ---
 
@@ -152,7 +145,7 @@ $$
 
 ### 3.1 Requisitos
 
-| Requisito de la guía | Valor |
+| Requisito | Valor |
 |---|---|
 | Dimensiones máximas | 10 cm × 10 cm, altura libre |
 | Peso máximo | 500 g |
@@ -281,8 +274,6 @@ Respuesta calculada con la transformada bilineal:
 
 El retardo de grupo en baja frecuencia es ≈ $\sqrt2/(2\pi f_c) \approx 11$ ms, aceptable para el lazo de control. El costo es de 5 multiplicaciones y 4 sumas por canal y muestra. El tiempo real que toma el filtrado completo (6 canales de IIR y 2 de media móvil) se mide en cada ciclo y se guarda en la columna `filt_us` de la telemetría.
 
-> Tiempo medido de filtrado: **⟨completar con el promedio de `filt_us` del CSV⟩ µs** por ciclo.
-
 **Velocidad de las ruedas: media móvil de $N = 5$ muestras**
 
 | Característica | Valor |
@@ -294,7 +285,7 @@ El retardo de grupo en baja frecuencia es ≈ $\sqrt2/(2\pi f_c) \approx 11$ ms,
 
 Suaviza los saltos de la estimación por período sin retrasar el PID de forma apreciable.
 
-**Por qué IIR y media móvil, y no FIR ni adaptativos:** en las partes anteriores de la práctica (filtrado de señales periódicas y de sensores), el equipo comparó filtros FIR, IIR y adaptativos. Los FIR necesitaban muchos más coeficientes para una banda de transición equivalente, con más memoria, más tiempo de cómputo y más retardo. Los adaptativos tuvieron el peor desempeño con estas señales. En un microcontrolador sin FPU y con un lazo de 5 ms, el IIR de orden 2 y la media móvil dan la mejor relación entre atenuación, retardo y costo.
+**Por qué IIR y media móvil, y no FIR ni adaptativos:** en etapas anteriores (filtrado de señales periódicas y de sensores), el equipo comparó filtros FIR, IIR y adaptativos. Los FIR necesitaban muchos más coeficientes para una banda de transición equivalente, con más memoria, más tiempo de cómputo y más retardo. Los adaptativos tuvieron el peor desempeño con estas señales. En un microcontrolador sin FPU y con un lazo de 5 ms, el IIR de orden 2 y la media móvil dan la mejor relación entre atenuación, retardo y costo.
 
 **Filtrado de pulsos falsos en los encoders**, aplicado en la interrupción:
 1. **Tiempo mínimo entre flancos:** 4 ms. Rechaza los rebotes y aun así permite medir hasta ≈39 rad/s reales.
@@ -304,10 +295,6 @@ Suaviza los saltos de la estimación por período sin retrasar el PID de forma a
 ### 5.3 Datos crudos y filtrados
 
 El `data_logger` guarda, para cada muestra, la IMU cruda y filtrada y la velocidad de las ruedas cruda y filtrada (las 30 columnas descritas en el [README](README.md#protocolo-udp)). Con esos CSV se comparan la señal cruda y la filtrada en el tiempo y en frecuencia (FFT), y se verifica la atenuación de la vibración de los motores.
-
-> Figuras sugeridas, a generar con los CSV del equipo: **⟨completar⟩**
-> - $g_z$ crudo y filtrado con el robot avanzando, y su espectro (FFT).
-> - $\omega_l$ y $\omega_r$ crudas y filtradas frente a la referencia.
 
 ---
 
@@ -402,23 +389,7 @@ ros2 run minisumo_ros routines --ros-args -p rutina:=giro     -p angulo:=90     
 | Cuadrado de 0,3 m de lado, giros de 90° a 3 rad/s | 16 (con pausas) | 13,29 s | (0,000 m; 0,000 m; 0°) |
 | Giro en el sitio de 90° a 3 rad/s | 1 | 0,52 s | (0,000 m; 0,000 m; 90°) |
 
-### 8.2 Resultados
-
-| Rutina | Iteración | Deseada $x$ (m) | Deseada $y$ (m) | Real $x$ (m) | Real $y$ (m) | Estimada $x$ (m) | Estimada $y$ (m) |
-|---|---|---|---|---|---|---|---|
-| Recta | 1 | 0,500 | 0,000 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Recta | 2 | 0,500 | 0,000 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Recta | 3 | 0,500 | 0,000 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Arco | 1 | 0,200 | 0,200 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Arco | 2 | 0,200 | 0,200 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Arco | 3 | 0,200 | 0,200 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Cuadrado | 1 | 0,000 | 0,000 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Cuadrado | 2 | 0,000 | 0,000 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Cuadrado | 3 | 0,000 | 0,000 | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-
-Las columnas deseada y estimada se copian de `~/minisumo_datos/rutinas.csv`. La real se mide.
-
-### 8.3 Cálculo del error
+### 8.2 Método de evaluación del error
 
 Para cada iteración, el error de la estimación respecto a la posición real:
 
@@ -432,15 +403,9 @@ $$
 e_{mod} = \sqrt{(x_{des} - x_{real})^2 + (y_{des} - y_{real})^2}
 $$
 
-| Rutina | $\bar e_{est}$ (cm) | $\sigma_{e_{est}}$ (cm) | $\bar e_{mod}$ (cm) | $\sigma_{e_{mod}}$ (cm) |
-|---|---|---|---|---|
-| Recta | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Arco | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
-| Cuadrado | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ | ⟨completar⟩ |
+### 8.3 Fuentes de error esperadas
 
-### 8.4 Fuentes de error esperadas
-
-Este análisis se hace a partir del diseño. Con los resultados de la tabla 8.2 se puede confirmar cuál fuente domina.
+Este análisis se hace a partir del diseño, antes de ejecutar las rutinas en el dojo.
 
 **Deseada frente a real ($e_{mod}$).** El modelo supone que las ruedas alcanzan la velocidad pedida al instante y no patinan. En el robot real:
 - **Arranque suave:** el ciclo útil sube con una rampa de unos 100 ms, y la inercia del motor añade su propio retardo. El robot recorre **menos** que $vT$, sobre todo en tramos cortos y en los giros del cuadrado.
@@ -467,7 +432,6 @@ Este análisis se hace a partir del diseño. Con los resultados de la tabla 8.2 
 3. **El ruido de un sensor puede bloquear el control si no se limita su efecto.** Los encoders de herradura de un canal tienen poca resolución y son muy sensibles al ruido eléctrico. La estimación por período entre flancos, los filtros de pulsos falsos y limitar cuánto puede corregir el PID alrededor de una prealimentación por motor evitaron que los pulsos falsos bloquearan las ruedas.
 4. **Para ir recto hace falta realimentar el rumbo.** El control de rumbo PI con el giroscopio corrigió la diferencia entre motores sin depender de los encoders. La sintonización mostró la relación esperada: $k_p$ amortigua y $k_i$ elimina el error sostenido.
 5. **La integración exige diagnóstico sistemático.** Fueron clave el monitor de estado (tiempo del lazo, errores de la IMU, temperatura, causa del reinicio), el modo de lazo abierto `M` y la telemetría completa en ROS2. Con ellos se separaron fallas de software (driver I2C), de hardware (soldadura, alimentación) y de red (subred del hotspot).
-6. **Experimento de posición final:** ⟨completar con la comparación numérica entre deseada, real y estimada: qué rutina tuvo mayor error y por qué, y si la estimación por sensores se acercó más a la posición real que el modelo⟩.
 
 ---
 
@@ -480,7 +444,6 @@ Este análisis se hace a partir del diseño. Con los resultados de la tabla 8.2 
 5. InvenSense, *MPU-6000 and MPU-6050 Product Specification*, rev. 3.4.
 6. Toshiba, *TB6612FNG Driver IC for Dual DC Motor*, hoja de datos.
 7. Open Robotics, *ROS 2 Documentation*. https://docs.ros.org/
-8. Guía de la Práctica 2, *Filtrado digital y robot minisumo teleoperado*, Procesamiento de Señales.
 
 ---
 

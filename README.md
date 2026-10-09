@@ -4,7 +4,7 @@ Robot minisumo diferencial con **ESP32-C3 Super Mini**, controlado de forma inal
 
 El robot lee una IMU y dos encoders a **200 muestras/s**, filtra las señales en el microcontrolador (IIR en la IMU, media móvil en las ruedas), cierra un **PID de velocidad por rueda** más un **control de rumbo con el giroscopio**, estima su posición (odometría con fusión encoders + giroscopio) y envía todos los datos, crudos y filtrados, al PC por UDP.
 
-> Proyecto de la Práctica 2 de Procesamiento de Señales, parte *Robot minisumo teleoperado*. El informe está en [INFORME.md](INFORME.md).
+> El informe del proyecto está en [INFORME.md](INFORME.md).
 
 ---
 
