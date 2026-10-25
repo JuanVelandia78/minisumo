@@ -4,6 +4,7 @@ Escucha los paquetes UDP del guante (GL,t_ms,pitch,roll,pitch_raw,roll_raw) y pu
   /cmd_vel        geometry_msgs/Twist   (lo convierte diff_kinematics en velocidad de cada rueda)
   /glove/angles   std_msgs/Float32MultiArray [pitch, roll, pitch_raw, roll_raw] en grados
 """
+import math
 import socket
 
 import rclpy
@@ -28,6 +29,8 @@ class GloveTeleop(Node):
         self.declare_parameter('v_max', 0.25)          # m/s con la mano totalmente inclinada
         self.declare_parameter('w_max', 4.0)           # rad/s de giro con la mano totalmente inclinada
         self.declare_parameter('deadzone_deg', 8.0)    # inclinación que se ignora
+        self.declare_parameter('roll_deadzone_deg', 12.0)  # zona muerta del giro: en reposo la mano
+                                                           # suele quedar algo ladeada
         self.declare_parameter('max_deg', 35.0)        # inclinación que da la velocidad máxima
         self.declare_parameter('invert_pitch', False)  # True si al inclinar adelante el robot retrocede
         self.declare_parameter('invert_roll', False)   # True si al inclinar a la derecha gira a la izquierda
@@ -91,7 +94,11 @@ class GloveTeleop(Node):
         cmd = Twist()
         # Mano hacia adelante (cabeceo negativo) -> avanzar; mano a la derecha -> girar a la derecha
         cmd.linear.x = -sp * shape(self.pitch, dz, mx) * self.get_parameter('v_max').value
-        cmd.angular.z = -sr * shape(self.roll, dz, mx) * self.get_parameter('w_max').value
+        # Con la mano muy inclinada adelante/atrás el alabeo pierde sentido (se acerca a la vertical):
+        # su peso baja con el coseno del cabeceo y desaparece pasando 60°
+        roll_w = max(0.0, (math.cos(math.radians(self.pitch)) - 0.5) / 0.5)
+        rdz = self.get_parameter('roll_deadzone_deg').value
+        cmd.angular.z = -sr * roll_w * shape(self.roll, rdz, mx) * self.get_parameter('w_max').value
         self.pub_cmd.publish(cmd)
         self.stopped = False
 
