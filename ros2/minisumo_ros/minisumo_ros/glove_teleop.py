@@ -34,6 +34,8 @@ class GloveTeleop(Node):
         self.declare_parameter('max_deg', 35.0)        # inclinación que da la velocidad máxima
         self.declare_parameter('invert_pitch', False)  # True si al inclinar adelante el robot retrocede
         self.declare_parameter('invert_roll', False)   # True si al inclinar a la derecha gira a la izquierda
+        self.declare_parameter('swap_axes', False)     # True si el MPU quedó girado 90° en la mano
+                                                       # (adelante gira y de lado avanza)
         self.declare_parameter('timeout', 0.5)         # s sin datos del guante -> detener
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -72,7 +74,10 @@ class GloveTeleop(Node):
             if self.last_rx is None:
                 self.get_logger().info(f'Guante encontrado en {addr[0]}')
             self.glove_addr = addr[0]
-            self.pitch, self.roll = vals[0], vals[1]
+            if self.get_parameter('swap_axes').value:
+                self.pitch, self.roll = vals[1], vals[0]
+            else:
+                self.pitch, self.roll = vals[0], vals[1]
             self.last_rx = self.get_clock().now()
             self.count += 1
             self.pub_ang.publish(Float32MultiArray(data=vals))
