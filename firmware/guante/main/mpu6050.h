@@ -5,6 +5,7 @@
 typedef struct {
     float ax, ay, az;   // g
     float gx, gy, gz;   // grados/s, sin bias
+    float temp;         // °C, sensor interno del MPU-6050
 } imu_sample_t;
 
 esp_err_t mpu_init(void);

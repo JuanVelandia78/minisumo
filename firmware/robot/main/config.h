@@ -20,8 +20,8 @@
 #define PIN_AIN1            6
 #define PIN_AIN2            7
 #define PIN_PWMB            10                 // motor derecho (B)
-#define PIN_BIN1            20
-#define PIN_BIN2            21
+#define PIN_BIN1            1                  // (antes GPIO20: la UART0 lo movía al arrancar)
+#define PIN_BIN2            0                  // (antes GPIO21: TX de la UART0, en alto al arrancar)
 
 #define PIN_ENC_L           3                  // sensor de herradura izquierdo
 #define PIN_ENC_R           4                  // sensor de herradura derecho
@@ -31,7 +31,7 @@
 // ---------------------------------------------------------------------------
 #define CONTROL_HZ          200                // frecuencia de muestreo de sensores (guía: 200 muestras/s)
 #define CONTROL_DT          (1.0f / CONTROL_HZ)
-#define TELEM_BATCH         4                  // muestras por paquete UDP -> 50 paquetes/s
+#define TELEM_BATCH         6                  // muestras por paquete UDP -> ~33 paquetes/s (menos trabajo de la radio, menos calor)
 #define CMD_TIMEOUT_MS      300                // sin comandos en este tiempo -> motores detenidos
 
 // ---------------------------------------------------------------------------
@@ -42,6 +42,10 @@
 #define PWM_MAX             0.70f              // límite de ciclo útil: motores de 6 V con batería 2S (8,4 V)
 #define MOTOR_L_INVERT      0                  // poner 1 si el motor gira al revés
 #define MOTOR_R_INVERT      0
+// Aislamiento con optoacopladores: el 6N137 invierte la señal (LED encendido = salida en bajo),
+// así que el PWM se genera invertido para que al TB6612 le llegue el ciclo útil correcto.
+// Poner 0 si el ESP se conecta directo al TB6612, sin optoacopladores.
+#define PWM_OUTPUT_INVERT   0
 #define MOTOR_SLEW_PER_S    3.0f               // arranque suave: el ciclo útil cambia como máximo 3/s (0 -> 0,3 en 100 ms)
 
 // ---------------------------------------------------------------------------

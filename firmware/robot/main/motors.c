@@ -33,6 +33,7 @@ void motors_init(void)
         .timer_sel = LEDC_TIMER_0,
         .duty = 0,
         .hpoint = 0,
+        .flags.output_invert = PWM_OUTPUT_INVERT,   // el 6N137 vuelve a invertirla
     };
     c.gpio_num = PIN_PWMA;
     c.channel = CH_L;

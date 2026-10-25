@@ -53,7 +53,7 @@ static portMUX_TYPE s_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
 
 typedef struct {
     int len;
-    char data[1400];
+    char data[1472];   // máximo de un datagrama UDP por WiFi sin fragmentar (6 líneas de ~240 bytes)
 } telem_pkt_t;
 
 // Muestra en binario: el lazo solo la copia a la cola; el texto (snprintf con ~30 floats,

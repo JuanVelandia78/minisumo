@@ -215,7 +215,7 @@ esp_err_t mpu_read(imu_sample_t *out)
     out->ax = be16(&b[0]) / ACCEL_LSB_PER_G;
     out->ay = be16(&b[2]) / ACCEL_LSB_PER_G;
     out->az = be16(&b[4]) / ACCEL_LSB_PER_G;
-    // b[6..7] es temperatura
+    out->temp = be16(&b[6]) / 340.0f + 36.53f;      // fórmula del mapa de registros del MPU-6050
     out->gx = be16(&b[8]) / GYRO_LSB_PER_DPS - s_gbias[0];
     out->gy = be16(&b[10]) / GYRO_LSB_PER_DPS - s_gbias[1];
     out->gz = be16(&b[12]) / GYRO_LSB_PER_DPS - s_gbias[2];

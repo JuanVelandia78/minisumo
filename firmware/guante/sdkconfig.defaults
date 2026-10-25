@@ -1,3 +1,5 @@
 CONFIG_IDF_TARGET="esp32"
 # Tick de 1 ms para un muestreo de 10 ms preciso
 CONFIG_FREERTOS_HZ=1000
+# 80 MHz alcanza de sobra para leer la IMU a 100 Hz y enviar por WiFi, y el chip se calienta menos
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
