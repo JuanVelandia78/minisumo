@@ -44,9 +44,11 @@ class GloveTeleop(Node):
         self.pitch = 0.0
         self.roll = 0.0
         self.last_rx = None
+        self.glove_addr = None
         self.stopped = True
         self.count = 0
         self.create_timer(0.02, self.loop)    # 50 Hz
+        self.create_timer(0.5, self.hello)    # aviso al guante para que envíe directo (unicast)
         self.create_timer(2.0, self.report)
         self.get_logger().info(f'Esperando el guante en UDP {self.get_parameter("port").value}...')
 
@@ -66,6 +68,7 @@ class GloveTeleop(Node):
                 continue
             if self.last_rx is None:
                 self.get_logger().info(f'Guante encontrado en {addr[0]}')
+            self.glove_addr = addr[0]
             self.pitch, self.roll = vals[0], vals[1]
             self.last_rx = self.get_clock().now()
             self.count += 1
@@ -91,6 +94,15 @@ class GloveTeleop(Node):
         cmd.angular.z = -sr * shape(self.roll, dz, mx) * self.get_parameter('w_max').value
         self.pub_cmd.publish(cmd)
         self.stopped = False
+
+    def hello(self):
+        # El broadcast del guante llega mal por un hotspot de celular: al recibir "GLP" el
+        # guante pasa a enviar directo a este PC
+        if self.glove_addr:
+            try:
+                self.sock.sendto(b'GLP', (self.glove_addr, self.get_parameter('port').value))
+            except OSError:
+                pass
 
     def report(self):
         if self.last_rx is None:
