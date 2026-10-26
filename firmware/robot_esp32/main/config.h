@@ -65,8 +65,9 @@
 #define ENC_DEBOUNCE_US     4000               // ignora flancos más cercanos que esto (permite hasta ~39 rad/s reales)
 #define ENC_OMEGA_PHYS_MAX  40.0f              // rad/s: una lectura mayor es físicamente imposible -> ruido
 #define ENC_CONFIRM_US      50                 // el pin debe seguir en alto 50 us después del flanco (descarta ruido de los motores)
-#define ENC_GLITCH_PCT      35                 // rechaza flancos que llegan antes del 35 % del intervalo anterior (ruido)
-#define ENC_GLITCH_MAX_US   10000              // tope del umbral adaptativo (no rechaza aceleraciones reales)
+#define ENC_GLITCH_PCT      70                 // rechaza flancos que llegan antes del 70 % del intervalo anterior: el LM393
+                                               // tiembla en el borde de la ranura y con ruido daba un pulso extra por ranura
+#define ENC_GLITCH_MAX_US   80000              // tope del umbral adaptativo (a baja velocidad hay ~60 ms entre ranuras)
 #define ENC_STOP_TIMEOUT_US 150000             // sin flancos en este tiempo -> velocidad 0
 
 // ---------------------------------------------------------------------------

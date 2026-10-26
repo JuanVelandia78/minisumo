@@ -281,7 +281,7 @@ El guante empieza por broadcast. Cuando recibe `GLP` de glove_teleop, envía dir
 | Grupo | Parámetros |
 |---|---|
 | Lazo | `CONTROL_HZ 200`, `CMD_TIMEOUT_MS 700`, `PWM_FREQ_HZ 20000`, `PWM_MAX 0.55`, rampa `REF_ACCEL_MAX 25` rad/s² |
-| Encoders | `ENC_SLOTS 20`, solo flanco de subida, confirmación de 50 µs (`ENC_CONFIRM_US`), `ENC_OMEGA_PHYS_MAX 40` |
+| Encoders | `ENC_SLOTS 20`, solo flanco de subida, confirmación de 50 µs (`ENC_CONFIRM_US`), rechazo de flancos antes del 70 % del intervalo anterior (`ENC_GLITCH_PCT 70`, tope `ENC_GLITCH_MAX_US 80000`), `ENC_OMEGA_PHYS_MAX 40` |
 | Ruedas | prealimentación `PID_KFF 0.010`, zona muerta 0,10 (izquierda) y 0,09 (derecha); `PID_KP` y `PID_KI` en 0 |
 | Rumbo (en cascada, sobre la velocidad pedida a cada rueda) | `YAW_KP 1.0`, `YAW_KI 17.5`, `YAW_CORR_MAX 7.5` rad/s, `GYRO_Z_SIGN +1` |
 | Giroscopio | la calibración al arrancar se repite sola si el robot se movió (`GYRO_CAL_MAX_STD`) |
