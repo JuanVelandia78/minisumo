@@ -45,6 +45,8 @@ class GloveTeleop(Node):
 
         self.pub_cmd = self.create_publisher(Twist, 'cmd_vel', 10)
         self.pub_ang = self.create_publisher(Float32MultiArray, 'glove/angles', 10)
+        # Ángulos de la mano ya corregidos (swap/invert): [adelante, derecha] en grados, para el visualizador
+        self.pub_hand = self.create_publisher(Float32MultiArray, 'glove/hand_angles', 10)
 
         self.pitch = 0.0
         self.roll = 0.0
@@ -95,6 +97,8 @@ class GloveTeleop(Node):
         mx = self.get_parameter('max_deg').value
         sp = -1.0 if self.get_parameter('invert_pitch').value else 1.0
         sr = -1.0 if self.get_parameter('invert_roll').value else 1.0
+        # Mano adelante = cabeceo negativo; mano a la derecha = alabeo positivo (con las correcciones)
+        self.pub_hand.publish(Float32MultiArray(data=[-sp * self.pitch, sr * self.roll]))
 
         cmd = Twist()
         # Mano hacia adelante (cabeceo negativo) -> avanzar; mano a la derecha -> girar a la derecha
