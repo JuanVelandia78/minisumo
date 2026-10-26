@@ -38,12 +38,15 @@ class SignalPlotter(Node):
     def __init__(self):
         super().__init__('signal_plotter')
         self.declare_parameter('ventana_s', 10.0)     # segundos visibles
+        self.declare_parameter('periodo_ms', 300)     # cada cuánto se redibuja (más alto = menos carga)
+        self.declare_parameter('max_puntos', 300)     # puntos dibujados por línea (se submuestrea)
         self.declare_parameter('robot_acc', 'x')      # eje de la aceleración del robot
         self.declare_parameter('robot_gyro', 'z')     # eje del giroscopio del robot
         self.declare_parameter('glove_acc', 'x')
         self.declare_parameter('glove_gyro', 'y')
 
         self.t0 = time.monotonic()
+        self.win = self.get_parameter('ventana_s').value
         self.lock = threading.Lock()
         self.data = collections.defaultdict(collections.deque)
 
@@ -60,7 +63,7 @@ class SignalPlotter(Node):
 
     def add(self, key, value):
         t = time.monotonic() - self.t0
-        win = self.get_parameter('ventana_s').value
+        win = self.win
         with self.lock:
             d = self.data[key]
             d.append((t, value))
@@ -91,7 +94,10 @@ class SignalPlotter(Node):
     def series(self, key):
         with self.lock:
             d = list(self.data[key])
-        return [p[0] for p in d], [p[1] for p in d]
+        vals = [p[1] for p in d]
+        # Se dibuja una de cada k muestras para no saturar la VM (la σ usa todas)
+        k = max(1, len(d) // self.get_parameter('max_puntos').value)
+        return [p[0] for p in d[::k]], vals[::k], vals
 
 
 def main():
@@ -134,8 +140,8 @@ def main():
         now = time.monotonic() - node.t0
         win = node.get_parameter('ventana_s').value
         for ax, title, kr, kf, lr, lf in lines:
-            tr, vr = node.series(kr)
-            tf, vf = node.series(kf)
+            tr, vr, allr = node.series(kr)
+            tf, vf, allf = node.series(kf)
             lr.set_data(tr, vr)
             lf.set_data(tf, vf)
             ax.set_xlim(max(0.0, now - win), max(win, now))
@@ -144,12 +150,12 @@ def main():
                 lo, hi = min(vals), max(vals)
                 pad = 0.1 * (hi - lo) + 1e-3
                 ax.set_ylim(lo - pad, hi + pad)
-                ax.set_title(f'{title}   σ crudo {sd(vr):.3g} | σ filtrado {sd(vf):.3g}', fontsize=9)
+                ax.set_title(f'{title}   σ crudo {sd(allr):.3g} | σ filtrado {sd(allf):.3g}', fontsize=9)
             else:
                 ax.set_title(f'{title}   (sin datos)', fontsize=9)
         return []
 
-    anim = FuncAnimation(fig, update, interval=100, cache_frame_data=False)  # noqa: F841
+    anim = FuncAnimation(fig, update, interval=p('periodo_ms'), cache_frame_data=False)  # noqa: F841
     plt.show()
     node.destroy_node()
     rclpy.try_shutdown()
