@@ -30,6 +30,7 @@ setup(
             'glove_teleop = minisumo_ros.glove_teleop:main',
             'routines = minisumo_ros.routines:main',
             'visualizer = minisumo_ros.visualizer:main',
+            'signal_plotter = minisumo_ros.signal_plotter:main',
         ],
     },
 )

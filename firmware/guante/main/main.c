@@ -1,15 +1,17 @@
 // Guante de teleoperación - ESP32 DevKit + MPU-6050
 // Mide la inclinación de la mano (cabeceo y alabeo) con un filtro complementario
-// (giroscopio + acelerómetro) y un IIR de primer orden, y la envía por UDP broadcast
-// al PC. El nodo glove_teleop de ROS2 la convierte en /cmd_vel para el robot.
+// (giroscopio + acelerómetro) y un IIR de primer orden, y la envía por UDP al PC (broadcast
+// hasta que glove_teleop avisa con "GLP"; luego directo). glove_teleop la convierte en /cmd_vel.
+// Además filtra la IMU cruda con un IIR Butterworth (orden 2, fc 10 Hz) y envía crudo y filtrado.
 //
 //   Mano inclinada hacia adelante / atrás  -> avanzar / retroceder
 //   Mano inclinada a la izquierda / derecha -> girar
 //
 // Paquete (texto, 50 por segundo):
-//   GL,t_ms,pitch,roll,pitch_raw,roll_raw
+//   GL,t_ms,pitch,roll,pitch_raw,roll_raw,ax,ay,az,gx,gy,gz,ax_f,ay_f,az_f,gx_f,gy_f,gz_f
 //   pitch y roll: grados respecto a la posición neutra, filtrados
 //   *_raw: grados respecto a la posición neutra, solo acelerómetro (sin filtrar)
+//   ax..gz: IMU cruda (g, °/s sin bias); *_f: la misma después del IIR
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -113,6 +115,17 @@ static void button_task(void *arg)
 // ---------------------------------------------------------------------------
 // Ángulos solo con el acelerómetro (grados): válidos con la mano quieta, ruidosos al moverla
 // Lleva un ángulo al rango [-180, 180) grados
+// Biquad (forma directa II transpuesta) para el IIR de la IMU cruda
+typedef struct { float z1, z2; } biquad_t;
+
+static float biquad(biquad_t *f, float x)
+{
+    float y = IMU_IIR_B0 * x + f->z1;
+    f->z1 = IMU_IIR_B1 * x - IMU_IIR_A1 * y + f->z2;
+    f->z2 = IMU_IIR_B2 * x - IMU_IIR_A2 * y;
+    return y;
+}
+
 static float wrap180(float a)
 {
     while (a >= 180.0f) a -= 360.0f;
@@ -184,6 +197,8 @@ static void glove_task(void *arg)
     TickType_t last = xTaskGetTickCount();
     int n = 0;
     uint32_t errors = 0;
+    static biquad_t imu_f[6];           // ax, ay, az, gx, gy, gz
+    float imf[6] = {0};
     int64_t last_log = 0;
 
     while (1) {
@@ -204,6 +219,10 @@ static void glove_task(void *arg)
             errors++;
             continue;
         }
+
+        // IIR pasa-bajos sobre la IMU cruda (para comparar crudo y filtrado en el PC)
+        const float raw[6] = {s.ax, s.ay, s.az, s.gx, s.gy, s.gz};
+        for (int k = 0; k < 6; k++) imf[k] = biquad(&imu_f[k], raw[k]);
 
         // Filtro complementario: el giroscopio sigue los movimientos rápidos y el
         // acelerómetro corrige la deriva lenta. gx gira alrededor de X (alabeo),
@@ -239,9 +258,14 @@ static void glove_task(void *arg)
         if (++n >= SEND_DIV) {
             n = 0;
             if (s_connected) {
-                char msg[96];
-                int len = snprintf(msg, sizeof(msg), "GL,%lld,%.2f,%.2f,%.2f,%.2f",
-                                   esp_timer_get_time() / 1000, pitch_f, roll_f, wrap180(pa - p0), wrap180(ra - r0));
+                // GL,t,pitch,roll,pitch_raw,roll_raw, ax,ay,az,gx,gy,gz (crudos), ax_f..gz_f (filtrados)
+                char msg[256];
+                int len = snprintf(msg, sizeof(msg),
+                                   "GL,%lld,%.2f,%.2f,%.2f,%.2f,"
+                                   "%.4f,%.4f,%.4f,%.2f,%.2f,%.2f,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f",
+                                   esp_timer_get_time() / 1000, pitch_f, roll_f, wrap180(pa - p0), wrap180(ra - r0),
+                                   s.ax, s.ay, s.az, s.gx, s.gy, s.gz,
+                                   imf[0], imf[1], imf[2], imf[3], imf[4], imf[5]);
                 struct sockaddr_in *dst = pc_ok ? &pc : &bcast;
                 sendto(sock, msg, len, 0, (struct sockaddr *)dst, sizeof(*dst));
             }

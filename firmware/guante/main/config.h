@@ -25,6 +25,13 @@
 #define SEND_DIV            2                  // envía 1 de cada 2 muestras -> 50 paquetes/s
 #define COMP_ALPHA          0.98f              // filtro complementario: peso del giroscopio frente al acelerómetro
 #define IIR_ALPHA           0.25f              // IIR de primer orden sobre los ángulos (suaviza el temblor de la mano)
+// IIR Butterworth pasa-bajos de orden 2 sobre la IMU cruda (ax..gz), fs = 100 Hz, fc = 10 Hz.
+// MATLAB: [b, a] = butter(2, 10/(100/2));  -> {b0, b1, b2, a1, a2} con a0 = 1
+#define IMU_IIR_B0          0.06745527f
+#define IMU_IIR_B1          0.13491055f
+#define IMU_IIR_B2          0.06745527f
+#define IMU_IIR_A1         -1.14298050f
+#define IMU_IIR_A2          0.41280160f
 #define GYRO_CAL_SAMPLES    200                // 2 s con la mano quieta al arrancar
 #define NEUTRAL_SAMPLES     100                // 1 s para tomar la posición neutra de la mano
 #define LOG_HZ              5                  // líneas por segundo en el monitor (ángulos y temperaturas)

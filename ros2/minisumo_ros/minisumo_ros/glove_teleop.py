@@ -3,14 +3,19 @@
 Escucha los paquetes UDP del guante (GL,t_ms,pitch,roll,pitch_raw,roll_raw) y publica:
   /cmd_vel        geometry_msgs/Twist   (lo convierte diff_kinematics en velocidad de cada rueda)
   /glove/angles   std_msgs/Float32MultiArray [pitch, roll, pitch_raw, roll_raw] en grados
+  /glove/imu/raw, /glove/imu/filtered   sensor_msgs/Imu  IMU de la mano antes y después del IIR
 """
 import math
 import socket
+
+G = 9.80665
+DEG2RAD = math.pi / 180.0
 
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray
+from sensor_msgs.msg import Imu
 
 
 def shape(angle, deadzone, max_angle):
@@ -47,6 +52,8 @@ class GloveTeleop(Node):
         self.pub_ang = self.create_publisher(Float32MultiArray, 'glove/angles', 10)
         # Ángulos de la mano ya corregidos (swap/invert): [adelante, derecha] en grados, para el visualizador
         self.pub_hand = self.create_publisher(Float32MultiArray, 'glove/hand_angles', 10)
+        self.pub_imu_raw = self.create_publisher(Imu, 'glove/imu/raw', 50)
+        self.pub_imu_f = self.create_publisher(Imu, 'glove/imu/filtered', 50)
 
         self.pitch = 0.0
         self.roll = 0.0
@@ -63,7 +70,7 @@ class GloveTeleop(Node):
         # Vacía el socket y se queda con el paquete más reciente
         while True:
             try:
-                data, addr = self.sock.recvfrom(256)
+                data, addr = self.sock.recvfrom(1024)
             except BlockingIOError:
                 break
             parts = data.decode(errors='ignore').strip().split(',')
@@ -83,6 +90,15 @@ class GloveTeleop(Node):
             self.last_rx = self.get_clock().now()
             self.count += 1
             self.pub_ang.publish(Float32MultiArray(data=vals))
+            if len(parts) >= 18:      # firmware que envía también la IMU cruda y filtrada
+                try:
+                    imu = [float(v) for v in parts[6:18]]
+                except ValueError:
+                    imu = None
+                if imu:
+                    stamp = self.get_clock().now().to_msg()
+                    self.pub_imu_raw.publish(self.make_imu(stamp, imu[0:6]))
+                    self.pub_imu_f.publish(self.make_imu(stamp, imu[6:12]))
 
         now = self.get_clock().now()
         fresh = self.last_rx is not None and \
@@ -110,6 +126,17 @@ class GloveTeleop(Node):
         cmd.angular.z = -sr * roll_w * shape(self.roll, rdz, mx) * self.get_parameter('w_max').value
         self.pub_cmd.publish(cmd)
         self.stopped = False
+
+    @staticmethod
+    def make_imu(stamp, v):
+        # v = [ax, ay, az] en g y [gx, gy, gz] en °/s -> unidades SI
+        m = Imu()
+        m.header.stamp = stamp
+        m.header.frame_id = 'mano'
+        m.linear_acceleration.x, m.linear_acceleration.y, m.linear_acceleration.z = (a * G for a in v[0:3])
+        m.angular_velocity.x, m.angular_velocity.y, m.angular_velocity.z = (w * DEG2RAD for w in v[3:6])
+        m.orientation_covariance[0] = -1.0   # sin estimación de orientación
+        return m
 
     def hello(self):
         # El broadcast del guante llega mal por un hotspot de celular: al recibir "GLP" el
