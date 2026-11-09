@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include "mpu6050.h"
+#include "i2c_bus.h"
 #include "config.h"
 #include "driver/gpio.h"
 #include "esp_rom_sys.h"
@@ -161,8 +162,15 @@ static esp_err_t probe(void)
     return ok ? ESP_OK : ESP_FAIL;
 }
 
-esp_err_t mpu_init(void)
+// ---------------------------------------------------------------------------
+// Acceso al bus para otros dispositivos (INA219). Solo se usa desde la misma tarea que lee
+// el MPU (el lazo de control), así que no hace falta exclusión mutua.
+// ---------------------------------------------------------------------------
+static bool s_bus_ready;
+
+void i2c_bus_init(void)
 {
+    if (s_bus_ready) return;
     gpio_config_t io = {
         .pin_bit_mask = (1ULL << PIN_I2C_SDA) | (1ULL << PIN_I2C_SCL),
         .mode = GPIO_MODE_INPUT_OUTPUT_OD,
@@ -173,6 +181,41 @@ esp_err_t mpu_init(void)
     gpio_set_level(PIN_I2C_SCL, 1);
     vTaskDelay(pdMS_TO_TICKS(50));
     i2c_recover();
+    s_bus_ready = true;
+}
+
+esp_err_t i2c_bus_probe(uint8_t addr)
+{
+    bool ok = i2c_start() && i2c_write_byte(addr << 1);
+    ok = i2c_stop() && ok;
+    if (!ok) i2c_recover();
+    return ok ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t i2c_bus_write16(uint8_t addr, uint8_t reg, uint16_t val)
+{
+    bool ok = i2c_start() && i2c_write_byte(addr << 1) && i2c_write_byte(reg) &&
+              i2c_write_byte(val >> 8) && i2c_write_byte(val & 0xFF);
+    ok = i2c_stop() && ok;
+    if (!ok) i2c_recover();
+    return ok ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t i2c_bus_read16(uint8_t addr, uint8_t reg, uint16_t *val)
+{
+    uint8_t b[2] = {0};
+    bool ok = i2c_start() && i2c_write_byte(addr << 1) && i2c_write_byte(reg) &&
+              i2c_start() && i2c_write_byte((addr << 1) | 1) &&
+              i2c_read_byte(&b[0], true) && i2c_read_byte(&b[1], false);
+    ok = i2c_stop() && ok;
+    if (!ok) i2c_recover();
+    if (ok) *val = (uint16_t)((b[0] << 8) | b[1]);
+    return ok ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t mpu_init(void)
+{
+    i2c_bus_init();
 
     esp_err_t err = ESP_FAIL;
     for (int i = 0; i < 5 && err != ESP_OK; i++) {

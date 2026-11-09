@@ -17,3 +17,7 @@ log/
 # Editores
 .vscode/
 .devcontainer/
+
+# Artefactos de desarrollo
+.impeccable/
+*.zip

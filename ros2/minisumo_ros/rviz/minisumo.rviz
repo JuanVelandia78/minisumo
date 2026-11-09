@@ -5,11 +5,16 @@ Panels:
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 300
+    Tree Height: 260
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.3
+    - Alpha: 0.25
       Cell Size: 0.1
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
@@ -29,12 +34,16 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Dojo, robot y mano
+      Name: Minisumo (modelo, dojo, HUD y mano)
       Namespaces:
         dojo: true
+        hud: true
         mano: true
+        orden: true
         robot: true
-        texto: true
+        ruedas: true
+        rumbo: true
+        trayectoria: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -46,10 +55,10 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 0; 200; 255
-      Enabled: true
+      Enabled: false
       Line Style: Lines
       Line Width: 0.01
-      Name: Trayectoria
+      Name: Trayectoria (Path, un color)
       Pose Style: None
       Topic:
         Depth: 5
@@ -57,14 +66,14 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /minisumo/path
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/TF
       Enabled: false
       Name: Ejes (TF)
       Value: false
   Enabled: true
   Global Options:
-    Background Color: 40; 44; 52
+    Background Color: 32; 35; 42
     Fixed Frame: odom
     Frame Rate: 30
   Name: root
@@ -74,20 +83,55 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.8
+      Distance: 1.7
       Focal Point:
-        X: 0
-        Y: -0.25
+        X: 0.12
+        Y: -0.15
         Z: 0
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.9
+      Pitch: 0.75
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.14
-    Saved: ~
+      Yaw: -1.9
+    Saved:
+      - Class: rviz_default_plugins/Orbit
+        Distance: 1.7
+        Focal Point:
+          X: 0.12
+          Y: -0.15
+          Z: 0
+        Name: Dojo completo
+        Near Clip Distance: 0.01
+        Pitch: 0.75
+        Target Frame: <Fixed Frame>
+        Value: Orbit (rviz)
+        Yaw: -1.9
+      - Angle: 0
+        Class: rviz_default_plugins/TopDownOrtho
+        Name: Cenital
+        Near Clip Distance: 0.01
+        Scale: 700
+        Target Frame: <Fixed Frame>
+        Value: TopDownOrtho (rviz)
+        X: 0.1
+        Y: -0.15
+      - Class: rviz_default_plugins/Orbit
+        Distance: 0.45
+        Focal Point:
+          X: 0.03
+          Y: 0
+          Z: 0.03
+        Name: Seguir robot
+        Near Clip Distance: 0.01
+        Pitch: 0.55
+        Target Frame: base_link
+        Value: Orbit (rviz)
+        Yaw: 3.9
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 800
-  Width: 1200
+  Height: 850
+  Views:
+    collapsed: false
+  Width: 1300

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>CAR-LOSS · Manual de usuario</title>
+<style>
+@font-face{font-family:'Barlow';font-weight:400;src:url(../../ros2/minisumo_ros/web/vendor/fonts/Barlow-400.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-weight:500;src:url(../../ros2/minisumo_ros/web/vendor/fonts/Barlow-500.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-weight:600;src:url(../../ros2/minisumo_ros/web/vendor/fonts/Barlow-600.woff2) format('woff2')}
+@font-face{font-family:'Barlow Semi Condensed';font-weight:500;src:url(../../ros2/minisumo_ros/web/vendor/fonts/BarlowSemiCondensed-500.woff2) format('woff2')}
+@font-face{font-family:'Barlow Semi Condensed';font-weight:600;src:url(../../ros2/minisumo_ros/web/vendor/fonts/BarlowSemiCondensed-600.woff2) format('woff2')}
+@font-face{font-family:'Barlow Semi Condensed';font-weight:700;src:url(../../ros2/minisumo_ros/web/vendor/fonts/BarlowSemiCondensed-700.woff2) format('woff2')}
+:root{--ink:#1d1a17;--muted:#62584f;--rule:#ddd5c9;--paper:#fffdf9;--clay:#f3eee6;--clay2:#e9e1d5;--car:#e8b400;--carSoft:#fff3c4;--red:#c42a2f;--ok:#2e9f6e;--amber:#d98a1c;--night:#16130f}
+@page{size:A4;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;background:#8c857c}
+body{font:11.5pt/1.45 'Barlow',sans-serif;color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{width:210mm;height:297mm;background:var(--paper);position:relative;overflow:hidden;page-break-after:always;padding:16mm 16mm 18mm;margin:0 auto 6mm}
+.page:last-child{page-break-after:auto}
+h1,h2,h3{font-family:'Barlow Semi Condensed',sans-serif;margin:0;letter-spacing:.01em}
+h2{font-size:25pt;font-weight:700;line-height:1.05}
+h3{font-size:14pt;font-weight:600}
+p{margin:0 0 3mm}
+.num{display:inline-flex;align-items:center;justify-content:center;width:9mm;height:9mm;border-radius:50%;background:var(--ink);color:#fff;font:700 13pt 'Barlow Semi Condensed';flex:none}
+.sec-head{display:flex;align-items:center;gap:4mm;margin-bottom:5mm;padding-bottom:3mm;border-bottom:2px solid var(--ink)}
+.sec-head .tag{font:600 9pt 'Barlow Semi Condensed';letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-left:auto}
+.lead{font-size:12.5pt;color:var(--muted);max-width:150mm;margin-bottom:6mm}
+.foot{position:absolute;left:16mm;right:16mm;bottom:8mm;display:flex;justify-content:space-between;font:500 8.5pt 'Barlow Semi Condensed';letter-spacing:.03em;color:var(--muted);border-top:1px solid var(--rule);padding-top:2mm}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6mm}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm}
+.card{background:var(--clay);border-radius:3mm;padding:5mm}
+.card h3{margin-bottom:2mm}
+.shot{width:100%;border-radius:2mm;display:block;box-shadow:0 1mm 4mm rgba(0,0,0,.18)}
+.cap{font-size:9.5pt;color:var(--muted);margin-top:2mm}
+.step{display:grid;grid-template-columns:14mm 1fr 52mm;gap:5mm;align-items:center;padding:4mm 0;border-bottom:1px solid var(--rule)}
+.step:last-child{border-bottom:0}
+.step .big{width:13mm;height:13mm;border-radius:50%;background:var(--car);display:flex;align-items:center;justify-content:center;font:700 19pt 'Barlow Semi Condensed'}
+.step h3{margin-bottom:1mm}
+.step p{margin:0;color:var(--muted);font-size:10.5pt}
+.step svg{width:100%;height:auto}
+code,.cmd{font-family:Consolas,monospace;font-size:9.5pt}
+.cmd{display:block;background:var(--night);color:#f2ece2;padding:3mm 4mm;border-radius:2mm;margin-top:2mm;word-break:break-all}
+.warn{background:#fdecea;border-left:2mm solid var(--red);padding:4mm 5mm;border-radius:0 2mm 2mm 0}
+.tip{background:var(--carSoft);border-left:2mm solid var(--car);padding:4mm 5mm;border-radius:0 2mm 2mm 0}
+.ok{color:#1f7a52}.am{color:#9a5a0c}.rd{color:var(--red)}
+.annot{position:relative}
+.pin{position:absolute;transform:translate(-50%,-50%);width:7.5mm;height:7.5mm;border-radius:50%;background:var(--car);color:var(--ink);font:700 11pt 'Barlow Semi Condensed';display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1mm var(--ink)}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:2.5mm 7mm;margin-top:5mm}
+.legend div{display:flex;gap:3mm;align-items:flex-start;font-size:10pt}
+.legend b{font-family:'Barlow Semi Condensed';font-weight:600}
+.legend .pin{position:static;transform:none;width:6.5mm;height:6.5mm;font-size:10pt;flex:none;box-shadow:none;border:.6mm solid var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:10pt}
+th,td{text-align:left;padding:2mm 3mm;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 9pt 'Barlow Semi Condensed';letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--ink)}
+.cover{background:var(--night);color:#f4efe6;padding:0}
+.cover .inner{position:absolute;inset:0;padding:22mm 18mm;display:flex;flex-direction:column}
+.cover .mark{font:700 54pt/0.95 'Barlow Semi Condensed';letter-spacing:.04em}
+.cover .mark span{display:inline-block;width:10mm;height:10mm;border:2.4mm solid #f4efe6;border-radius:50%;margin:0 3mm;vertical-align:middle}
+.cover .sub{font:500 17pt 'Barlow Semi Condensed';letter-spacing:.06em;color:var(--car);margin-top:5mm;text-transform:uppercase}
+.cover .robot{position:absolute;right:6mm;top:104mm;width:120mm;filter:drop-shadow(0 6mm 8mm rgba(0,0,0,.6))}
+.cover .ring{position:absolute;right:-48mm;top:84mm;width:196mm;height:196mm;border-radius:50%;background:#0d0c0b;box-shadow:inset 0 0 0 9mm #ece6dc}
+.cover .desc{max-width:95mm;font-size:13pt;color:#cfc6ba;margin-top:12mm;position:relative}
+.cover .meta{position:absolute;left:18mm;bottom:16mm;font:500 10pt 'Barlow Semi Condensed';letter-spacing:.1em;color:#a99f93;text-transform:uppercase}
+.toc{margin-top:auto;margin-bottom:12mm;position:relative;max-width:82mm;background:rgba(22,19,15,.92);padding:3mm 4mm;margin-left:-4mm}
+.toc div{display:flex;gap:4mm;padding:2mm 0;border-top:1px solid #3a332d;font:500 11.5pt 'Barlow Semi Condensed'}
+.toc div b{color:var(--car);width:7mm}
+.do{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+.do .card{display:flex;gap:4mm;align-items:flex-start}
+.do svg{width:16mm;height:16mm;flex:none}
+</style>
+</head>
+<body>
+
+<!-- ================= PORTADA ================= -->
+<section class="page cover">
+  <div class="ring"></div>
+  <img class="robot" src="../img/robot_3d.png" alt="Robot CAR-LOSS">
+  <div class="inner">
+    <div class="mark">CAR<span></span>LOSS</div>
+    <div class="sub">Manual de usuario</div>
+    <p class="desc">Guía visual, paso a paso, para encender, manejar y cuidar el robot minisumo. No necesitas saber programación.</p>
+    <div class="toc">
+      <div><b>1</b>¿Qué es CAR-LOSS?</div>
+      <div><b>2</b>Antes de empezar</div>
+      <div><b>3</b>Encender todo en 6 pasos</div>
+      <div><b>4</b>La consola</div>
+      <div><b>5</b>Manejar con el guante</div>
+      <div><b>6</b>Manejar desde la consola · Ir a un punto</div>
+      <div><b>7</b>Parar · Avisos · Problemas</div>
+    </div>
+  </div>
+  <div class="meta">Robot minisumo teleoperado · ROS2 · 2026</div>
+</section>
+
+<!-- ================= 1. QUÉ ES ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">1</span><h2>¿Qué es CAR-LOSS?</h2><span class="tag">Conócelo</span></div>
+  <p class="lead">Un robot pequeño de sumo que manejas inclinando la mano con un guante, o desde una página web en el computador o el celular. Las tres partes se hablan por WiFi.</p>
+
+  <svg viewBox="0 0 600 250" width="100%" aria-label="Robot, guante y computador conectados por WiFi">
+    <defs><marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1d1a17"/></marker></defs>
+    <!-- hotspot -->
+    <g transform="translate(300,40)">
+      <rect x="-22" y="-28" width="44" height="74" rx="8" fill="#1d1a17"/><rect x="-17" y="-20" width="34" height="54" rx="3" fill="#fff3c4"/>
+      <path d="M-40,-30 a55,55 0 0 1 80,0" fill="none" stroke="#e8b400" stroke-width="5" stroke-linecap="round"/>
+      <path d="M-28,-18 a38,38 0 0 1 56,0" fill="none" stroke="#e8b400" stroke-width="5" stroke-linecap="round"/>
+      <text x="0" y="68" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="600" font-size="15">Hotspot WiFi 2,4 GHz</text>
+    </g>
+    <!-- guante -->
+    <g transform="translate(80,175)">
+      <path d="M-30,30 v-40 q0,-14 12,-14 v-26 q0,-10 9,-10 q9,0 9,10 v-8 q0,-10 9,-10 q9,0 9,10 v8 q0,-8 9,-8 q9,0 9,8 v26 q8,-6 14,2 l-12,30 v22 z" fill="#2a2420"/>
+      <rect x="-14" y="-6" width="28" height="18" rx="3" fill="#e8b400"/>
+      <text x="0" y="60" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="600" font-size="16">Guante</text>
+    </g>
+    <!-- robot -->
+    <g transform="translate(300,180)">
+      <rect x="-42" y="-34" width="84" height="56" rx="5" fill="#2a2420"/>
+      <rect x="-50" y="8" width="20" height="26" rx="4" fill="#e8b400"/><rect x="30" y="8" width="20" height="26" rx="4" fill="#e8b400"/>
+      <text x="0" y="56" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="600" font-size="16">Robot</text>
+    </g>
+    <!-- computador -->
+    <g transform="translate(520,175)">
+      <rect x="-48" y="-38" width="96" height="62" rx="5" fill="#2a2420"/><rect x="-42" y="-32" width="84" height="50" rx="2" fill="#16130f"/>
+      <circle cx="0" cy="-7" r="16" fill="none" stroke="#ece6dc" stroke-width="4"/><rect x="-6" y="-12" width="12" height="10" fill="#e8b400"/>
+      <path d="M-60,28 h120 l-10,10 h-100 z" fill="#3a332d"/>
+      <text x="0" y="60" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="600" font-size="16">Computador</text>
+    </g>
+    <path d="M110,140 Q190,80 262,62" fill="none" stroke="#1d1a17" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <path d="M300,118 L300,135" fill="none" stroke="#1d1a17" stroke-width="2.5" stroke-dasharray="6 5"/>
+    <path d="M338,62 Q420,80 480,132" fill="none" stroke="#1d1a17" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+  </svg>
+
+  <div class="grid3" style="margin-top:6mm">
+    <div class="card"><h3>Robot</h3><p>Lleva un computador pequeño (ESP32), dos motores, sensores de giro y de movimiento, y una batería recargable.</p></div>
+    <div class="card"><h3>Guante</h3><p>Siente la inclinación de tu mano. Inclinas hacia adelante y el robot avanza; de lado, gira.</p></div>
+    <div class="card"><h3>Computador</h3><p>Une todo y muestra la <b>consola</b>: el robot en 3D, su batería y botones para manejarlo o pararlo.</p></div>
+  </div>
+
+  <div class="tip" style="margin-top:7mm"><b>Idea clave:</b> los tres deben estar en la <b>misma red WiFi</b>, la del hotspot del celular, y esa red debe estar en <b>2,4 GHz</b>.</div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>1</span></div>
+</section>
+
+<!-- ================= 2. ANTES DE EMPEZAR ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">2</span><h2>Antes de empezar</h2><span class="tag">Revisa esto</span></div>
+
+  <h3 style="margin-bottom:3mm">Lo que necesitas</h3>
+  <div class="do" style="margin-bottom:7mm">
+    <div class="card"><svg viewBox="0 0 64 64"><rect x="8" y="18" width="48" height="32" rx="4" fill="#2a2420"/><rect x="2" y="34" width="10" height="16" rx="3" fill="#e8b400"/><rect x="52" y="34" width="10" height="16" rx="3" fill="#e8b400"/></svg><div><h3>El robot</h3><p>Con la batería puesta y el sensor de giro (MPU) en su sitio.</p></div></div>
+    <div class="card"><svg viewBox="0 0 64 64"><path d="M16,58 v-20 q0,-8 7,-8 v-16 q0,-6 5,-6 q5,0 5,6 v-4 q0,-6 5,-6 q5,0 5,6 v4 q0,-5 5,-5 q5,0 5,5 v18 l-6,26 z" fill="#2a2420"/><rect x="24" y="34" width="18" height="10" rx="2" fill="#e8b400"/></svg><div><h3>El guante</h3><p>Encendido y puesto en la mano con la que vas a manejar.</p></div></div>
+    <div class="card"><svg viewBox="0 0 64 64"><rect x="20" y="4" width="24" height="46" rx="5" fill="#2a2420"/><path d="M14,58 a26,26 0 0 1 36,0" fill="none" stroke="#e8b400" stroke-width="5" stroke-linecap="round"/></svg><div><h3>Un celular con hotspot</h3><p>Llamado <b>CamiloCC</b> y en la banda de <b>2,4 GHz</b>.</p></div></div>
+    <div class="card"><svg viewBox="0 0 64 64"><rect x="6" y="10" width="52" height="34" rx="3" fill="#2a2420"/><rect x="11" y="15" width="42" height="24" fill="#16130f"/><path d="M2,48 h60 l-5,6 h-50 z" fill="#62584f"/></svg><div><h3>El computador</h3><p>Con VirtualBox y la máquina virtual <b>Ubuntu</b>.</p></div></div>
+  </div>
+
+  <h3 style="margin-bottom:3mm">¿La batería tiene carga?</h3>
+  <svg viewBox="0 0 600 120" width="100%" aria-label="Niveles de batería">
+    <g font-family="Barlow Semi Condensed" font-weight="600">
+      <g transform="translate(20,20)"><rect width="150" height="56" rx="8" fill="none" stroke="#1d1a17" stroke-width="4"/><rect x="150" y="18" width="10" height="20" rx="2" fill="#1d1a17"/><rect x="8" y="8" width="134" height="40" rx="4" fill="#2e9f6e"/><text x="80" y="95" text-anchor="middle" font-size="17" fill="#2e9f6e">más de 7,0 V · lista</text></g>
+      <g transform="translate(220,20)"><rect width="150" height="56" rx="8" fill="none" stroke="#1d1a17" stroke-width="4"/><rect x="150" y="18" width="10" height="20" rx="2" fill="#1d1a17"/><rect x="8" y="8" width="62" height="40" rx="4" fill="#d98a1c"/><text x="80" y="95" text-anchor="middle" font-size="17" fill="#d98a1c">6,6–7,0 V · cárgala pronto</text></g>
+      <g transform="translate(420,20)"><rect width="150" height="56" rx="8" fill="none" stroke="#1d1a17" stroke-width="4"/><rect x="150" y="18" width="10" height="20" rx="2" fill="#1d1a17"/><rect x="8" y="8" width="22" height="40" rx="4" fill="#c42a2f"/><text x="80" y="95" text-anchor="middle" font-size="17" fill="#c42a2f">menos de 6,6 V · cárgala</text></g>
+    </g>
+  </svg>
+  <p class="cap">El voltaje lo ves en la consola, en el recuadro <b>Batería 2S</b>, con el mismo color. Llena marca unos 8,4 V.</p>
+
+  <h3 style="margin:6mm 0 3mm">Prepara el lugar</h3>
+  <div class="grid2">
+    <div class="card"><p><b>Dojo limpio y seco.</b> Es el círculo negro de 77 cm con borde blanco. El polvo hace patinar las ruedas.</p></div>
+    <div class="card"><p><b>Espacio libre alrededor.</b> Si el robot se sale del dojo, que no caiga de una mesa.</p></div>
+  </div>
+  <div class="warn" style="margin-top:6mm"><b>Importante:</b> el hotspot del celular debe estar en <b>2,4 GHz</b>. En Android busca "Banda de AP"; en iPhone activa "Maximizar compatibilidad". En 5 GHz el robot y el guante <b>no se conectan</b>.</div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>2</span></div>
+</section>
+
+<!-- ================= 3. ENCENDER ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">3</span><h2>Encender todo en 6 pasos</h2><span class="tag">Siempre en este orden</span></div>
+
+  <div class="step"><div class="big">1</div><div><h3>Enciende el hotspot del celular</h3><p>Red <b>CamiloCC</b>, banda 2,4 GHz. Conecta el computador a esa misma red WiFi.</p></div>
+    <svg viewBox="0 0 160 70"><rect x="64" y="6" width="32" height="58" rx="6" fill="#2a2420"/><path d="M38,26 a50,50 0 0 1 84,0" fill="none" stroke="#e8b400" stroke-width="5" stroke-linecap="round"/><path d="M50,36 a34,34 0 0 1 60,0" fill="none" stroke="#e8b400" stroke-width="5" stroke-linecap="round"/></svg></div>
+
+  <div class="step"><div class="big">2</div><div><h3>Abre la máquina virtual Ubuntu</h3><p>En VirtualBox, selecciona <b>Ubuntu</b> y pulsa <b>Iniciar</b>. Espera a ver el escritorio.</p></div>
+    <svg viewBox="0 0 160 70"><rect x="20" y="6" width="120" height="58" rx="5" fill="#2a2420"/><rect x="28" y="14" width="104" height="42" fill="#5a2b6b"/><circle cx="80" cy="35" r="12" fill="none" stroke="#fff" stroke-width="3"/></svg></div>
+
+  <div class="step"><div class="big">3</div><div><h3>Arranca el sistema</h3><p>En la máquina virtual abre una <b>Terminal</b> y escribe:</p><span class="cmd">ros2 launch minisumo_ros visualizacion.launch.py guante:=true rviz:=false</span></div>
+    <svg viewBox="0 0 160 70"><rect x="10" y="8" width="140" height="54" rx="5" fill="#16130f"/><text x="20" y="32" font-family="Consolas" font-size="14" fill="#e8b400">$ ros2 launch</text><rect x="20" y="40" width="10" height="14" fill="#ece6dc"/></svg></div>
+
+  <div class="step"><div class="big">4</div><div><h3>Enciende el robot y no lo muevas</h3><p>Ponlo en el dojo. Durante <b>2 segundos</b> calibra su sensor de giro. Si lo mueves, gira raro después.</p></div>
+    <svg viewBox="0 0 160 70"><rect x="50" y="14" width="60" height="40" rx="4" fill="#2a2420"/><rect x="42" y="38" width="14" height="20" rx="3" fill="#e8b400"/><rect x="104" y="38" width="14" height="20" rx="3" fill="#e8b400"/><circle cx="135" cy="20" r="14" fill="none" stroke="#1d1a17" stroke-width="3"/><path d="M135,12 v8 l5,4" stroke="#1d1a17" stroke-width="3" fill="none"/></svg></div>
+
+  <div class="step"><div class="big">5</div><div><h3>Enciende el guante con la mano quieta</h3><p>Mano <b>horizontal y en reposo</b>. Después, cada vez que quieras fijar el "cero", presiona el botón <b>BOOT</b> del guante.</p></div>
+    <svg viewBox="0 0 160 70"><rect x="20" y="40" width="120" height="14" rx="7" fill="#2a2420"/><rect x="62" y="30" width="36" height="14" rx="3" fill="#e8b400"/><text x="80" y="22" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="14" fill="#1d1a17">BOOT</text></svg></div>
+
+  <div class="step"><div class="big">6</div><div><h3>Abre la consola</h3><p>En el navegador de Windows escribe <code>localhost:8081</code>. En el celular, <code>&lt;IP del computador&gt;:8081</code>; la dirección exacta aparece en la consola, en <b>Sistema</b>.</p></div>
+    <svg viewBox="0 0 160 70"><rect x="10" y="8" width="140" height="54" rx="5" fill="#ece6dc" stroke="#1d1a17" stroke-width="2"/><rect x="18" y="16" width="124" height="12" rx="6" fill="#fff"/><text x="26" y="26" font-family="Consolas" font-size="10" fill="#1d1a17">localhost:8081</text><circle cx="80" cy="46" r="10" fill="#16130f" stroke="#e8b400" stroke-width="3"/></svg></div>
+
+  <div class="tip" style="margin-top:4mm">Sabrás que todo está bien cuando en la parte de arriba de la consola veas <b class="ok">● ROBOT 200 /s</b> y <b class="ok">● GUANTE 50 /s</b> en verde.</div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>3</span></div>
+</section>
+
+<!-- ================= 4. LA CONSOLA ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">4</span><h2>La consola</h2><span class="tag">Tu panel de control</span></div>
+  <div class="annot">
+    <img class="shot" src="../img/manual_vivo.png" alt="Consola, vista En vivo">
+    <span class="pin" style="left:13%;top:7%">1</span>
+    <span class="pin" style="left:82%;top:3%">2</span>
+    <span class="pin" style="left:12.5%;top:16%">3</span>
+    <span class="pin" style="left:44%;top:56%">4</span>
+    <span class="pin" style="left:31.5%;top:8.8%">5</span>
+    <span class="pin" style="left:27.5%;top:13.6%">6</span>
+    <span class="pin" style="left:63.5%;top:10%">7</span>
+    <span class="pin" style="left:86%;top:12%">8</span>
+    <span class="pin" style="left:72%;top:57%">9</span>
+    <span class="pin" style="left:97%;top:65.5%">10</span>
+    <span class="pin" style="left:97%;top:78%">11</span>
+    <span class="pin" style="left:12%;top:82%">12</span>
+  </div>
+  <div class="legend">
+    <div><span class="pin">1</span><span><b>Conexión.</b> Punto verde = robot y guante conectados. Gris = sin datos.</span></div>
+    <div><span class="pin">2</span><span><b>PARAR.</b> Detiene el robot al instante. También con la barra espaciadora.</span></div>
+    <div><span class="pin">3</span><span><b>Secciones:</b> En vivo, Señales, Control, Guante y Sistema. Atajos: teclas 1 a 5.</span></div>
+    <div><span class="pin">4</span><span><b>El dojo en 3D.</b> El robot se mueve como el real. La línea amarilla es su recorrido.</span></div>
+    <div><span class="pin">5</span><span><b>Cámaras:</b> Dojo (en ángulo), Cenital (desde arriba) y Seguir (detrás del robot).</span></div>
+    <div><span class="pin">6</span><span><b>Ir a punto.</b> Haz clic en el dojo y el robot va solo a ese lugar (página 6).</span></div>
+    <div><span class="pin">7</span><span><b>Al borde.</b> Cuántos cm le faltan para salirse. Ámbar a 12 cm, rojo a 6 cm.</span></div>
+    <div><span class="pin">8</span><span><b>Velocidad</b> del robot y su historia de los últimos 20 s.</span></div>
+    <div><span class="pin">9</span><span><b>Batería</b> en voltios: verde, ámbar o rojo.</span></div>
+    <div><span class="pin">10</span><span><b>Objetivo:</b> a dónde va, cuánto le falta y el botón Cancelar.</span></div>
+    <div><span class="pin">11</span><span><b>Eventos:</b> lo que pasó, por ejemplo "Perturbación corregida en 0,2 s".</span></div>
+    <div><span class="pin">12</span><span><b>Acciones:</b> reiniciar la posición, recalibrar el giro y autodiagnóstico.</span></div>
+  </div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>4</span></div>
+</section>
+
+<!-- ================= 5. GUANTE ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">5</span><h2>Manejar con el guante</h2><span class="tag">Inclina la mano</span></div>
+  <p class="lead">El robot copia la inclinación de tu mano. Cuanto más inclinas, más rápido va. A unos 30° va a su máxima velocidad.</p>
+
+  <svg viewBox="0 0 600 350" width="100%" aria-label="Posiciones de la mano y movimiento del robot">
+    <defs>
+      <g id="hand"><rect x="-46" y="-9" width="92" height="18" rx="9" fill="#2a2420"/><rect x="-16" y="-15" width="32" height="10" rx="2" fill="#e8b400"/></g>
+      <g id="bot"><rect x="-20" y="-16" width="40" height="32" rx="4" fill="#2a2420"/><rect x="-26" y="-12" width="8" height="24" rx="2" fill="#e8b400"/><rect x="18" y="-12" width="8" height="24" rx="2" fill="#e8b400"/></g>
+      <marker id="a2" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="10" refY="8" orient="auto"><path d="M0,0 L16,8 L0,16 z" fill="#e8b400"/></marker>
+    </defs>
+    <g font-family="Barlow Semi Condensed" font-weight="600" font-size="16" text-anchor="middle">
+      <!-- fila 1: la mano -->
+      <g transform="translate(75,55)"><use href="#hand" transform="rotate(25)"/><text y="58">Mano adelante</text></g>
+      <g transform="translate(225,55)"><use href="#hand" transform="rotate(-25)"/><text y="58">Mano atrás</text></g>
+      <g transform="translate(375,55)"><g transform="rotate(-25)"><rect x="-9" y="-40" width="18" height="80" rx="9" fill="#2a2420"/><rect x="-5" y="-14" width="10" height="28" rx="2" fill="#e8b400"/></g><text y="58">Ladea a la izquierda</text></g>
+      <g transform="translate(525,55)"><g transform="rotate(25)"><rect x="-9" y="-40" width="18" height="80" rx="9" fill="#2a2420"/><rect x="-5" y="-14" width="10" height="28" rx="2" fill="#e8b400"/></g><text y="58">Ladea a la derecha</text></g>
+      <!-- flechas de la mano al robot -->
+      <g stroke="#ddd5c9" stroke-width="2" stroke-dasharray="4 4"><path d="M75,125 v20"/><path d="M225,125 v20"/><path d="M375,125 v20"/><path d="M525,125 v20"/></g>
+      <!-- fila 2: el robot -->
+      <g transform="translate(75,205)"><use href="#bot"/><path d="M0,-22 v-28" stroke="#e8b400" stroke-width="6" marker-end="url(#a2)"/><text y="44" fill="#62584f" font-weight="500">Avanza</text></g>
+      <g transform="translate(225,190)"><use href="#bot"/><path d="M0,22 v26" stroke="#e8b400" stroke-width="6" marker-end="url(#a2)"/><text y="78" fill="#62584f" font-weight="500">Retrocede</text></g>
+      <g transform="translate(375,205)"><use href="#bot"/><path d="M20,-28 A32,32 0 0 0 -26,-16" fill="none" stroke="#e8b400" stroke-width="6" marker-end="url(#a2)"/><text y="44" fill="#62584f" font-weight="500">Gira a la izquierda</text></g>
+      <g transform="translate(525,205)"><use href="#bot"/><path d="M-20,-28 A32,32 0 0 1 26,-16" fill="none" stroke="#e8b400" stroke-width="6" marker-end="url(#a2)"/><text y="44" fill="#62584f" font-weight="500">Gira a la derecha</text></g>
+      <!-- reposo -->
+      <g transform="translate(300,300)"><use href="#hand"/><text y="40">Mano horizontal = el robot se queda quieto</text></g>
+    </g>
+  </svg>
+
+  <div class="grid2" style="margin-top:4mm">
+    <div class="card"><h3>Zona de descanso</h3><p>Las inclinaciones pequeñas, de menos de 8° hacia adelante o 12° de lado, no mueven el robot. Así no se mueve solo por el temblor de la mano.</p></div>
+    <div class="card"><h3>El botón BOOT</h3><p>Si el robot avanza solo con la mano quieta, deja la mano en reposo y presiona <b>BOOT</b>. Esa posición pasa a ser el nuevo "cero".</p></div>
+  </div>
+  <div style="margin-top:5mm" class="grid2">
+    <img class="shot" src="../img/manual_guante.png" alt="Sección Guante de la consola">
+    <div><h3 style="margin-bottom:2mm">Ver la mano en la consola</h3><p>En la sección <b>Guante</b> (tecla 4) ves dos diales con la inclinación de tu mano y una flecha con la orden que se le envía al robot.</p></div>
+  </div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>5</span></div>
+</section>
+
+<!-- ================= 6. CONSOLA: MANUAL + IR A PUNTO ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">6</span><h2>Manejar desde la consola</h2><span class="tag">Sin guante</span></div>
+  <div class="grid2">
+    <img class="shot" src="../img/manual_control.png" alt="Sección Control">
+    <div>
+      <h3 style="margin-bottom:2mm">Pad de manejo manual</h3>
+      <p>Ve a <b>Control y ganancias</b> (tecla 3). Arrastra el círculo amarillo en la dirección en que quieres que vaya el robot. También puedes usar las teclas <b>W A S D</b> o las flechas.</p>
+      <p>Al <b>soltar</b>, el robot se detiene. Con <b>Límite</b> bajas la velocidad máxima mientras practicas.</p>
+      <p class="cap">Apaga el guante mientras usas el pad, para que no den órdenes distintas al mismo tiempo.</p>
+    </div>
+  </div>
+
+  <h3 style="margin:7mm 0 3mm;font-size:17pt">Ir a un punto del dojo</h3>
+  <div class="grid2">
+    <div>
+      <div class="step" style="grid-template-columns:10mm 1fr"><span class="num">1</span><div><h3>Ponlo en el centro</h3><p>El robot en el centro del dojo, mirando hacia la derecha de la vista Cenital.</p></div></div>
+      <div class="step" style="grid-template-columns:10mm 1fr"><span class="num">2</span><div><h3>Reinicia la posición</h3><p>Pulsa <b>Reiniciar odometría</b>, abajo a la izquierda. El robot queda en (0, 0).</p></div></div>
+      <div class="step" style="grid-template-columns:10mm 1fr"><span class="num">3</span><div><h3>Activa Ir a punto</h3><p>Botón <b>Ir a punto</b> o tecla <b>G</b>. Aparece un círculo punteado: es el área segura.</p></div></div>
+      <div class="step" style="grid-template-columns:10mm 1fr"><span class="num">4</span><div><h3>Haz clic en el destino</h3><p>Dentro del círculo punteado. El robot gira, avanza y se detiene a menos de 2 cm del punto.</p></div></div>
+    </div>
+    <div>
+      <img class="shot" src="../img/manual_cenital_ir.png" alt="Modo Ir a punto">
+      <p class="cap">El marcador amarillo es el destino y la línea punteada, el camino. En <b>Objetivo</b> ves cuánto falta. <b>Cancelar</b> o la tecla Esc lo detienen.</p>
+    </div>
+  </div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>6</span></div>
+</section>
+
+<!-- ================= 7. PARAR, AVISOS, PROBLEMAS ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">7</span><h2>Parar, avisos y problemas</h2><span class="tag">Seguridad</span></div>
+
+  <div class="grid2" style="align-items:center">
+    <svg viewBox="0 0 300 120" width="100%" aria-label="Botón PARAR"><rect x="10" y="20" width="280" height="80" rx="6" fill="#c42a2f"/><rect x="38" y="45" width="30" height="30" rx="3" fill="none" stroke="#fff" stroke-width="5"/><text x="168" y="74" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="34" letter-spacing="5" fill="#fff">PARAR</text></svg>
+    <div><h3 style="margin-bottom:2mm">Para en cualquier momento</h3><p>Pulsa <b>PARAR</b> o la <b>barra espaciadora</b>. El robot ignora el guante y el pad hasta que pulses <b>Liberar</b> en la franja roja.</p></div>
+  </div>
+
+  <h3 style="margin:6mm 0 3mm">Qué significan los colores</h3>
+  <table>
+    <tr><th>Dónde</th><th>Verde</th><th>Ámbar</th><th>Rojo</th></tr>
+    <tr><td>Conexión (arriba)</td><td class="ok">Conectado</td><td class="am">Llegan pocos datos</td><td>Gris: sin datos</td></tr>
+    <tr><td>Batería</td><td class="ok">Más de 7,0 V</td><td class="am">Cárgala pronto</td><td class="rd">Menos de 6,6 V: cárgala</td></tr>
+    <tr><td>Borde del dojo</td><td>Blanco: lejos</td><td class="am">A 12 cm del borde</td><td class="rd">A 6 cm: ¡casi fuera!</td></tr>
+  </table>
+
+  <h3 style="margin:6mm 0 3mm">Si algo no funciona</h3>
+  <table>
+    <tr><th style="width:40%">Lo que ves</th><th>Qué hacer</th></tr>
+    <tr><td><b>"ROBOT sin datos"</b> o "Esperando al robot"</td><td>Revisa que el robot esté encendido y que el hotspot esté en <b>2,4 GHz</b>. Apágalo y préndelo.</td></tr>
+    <tr><td><b>"GUANTE sin datos"</b></td><td>Enciende el guante con la mano quieta. Revisa que esté cerca del celular.</td></tr>
+    <tr><td>La consola no abre</td><td>Revisa que el paso 3 (la terminal) siga corriendo. Escribe bien <code>localhost:8081</code>.</td></tr>
+    <tr><td>El robot avanza solo con la mano quieta</td><td>Mano en reposo y presiona <b>BOOT</b> en el guante.</td></tr>
+    <tr><td>El robot gira raro o no va recto</td><td>Déjalo quieto y pulsa <b>Recalibrar giroscopio</b>. Espera 2 s.</td></tr>
+    <tr><td>"Ir a punto" lo lleva a otro lugar</td><td>Antes de dar clic, ponlo en el centro mirando a la derecha y pulsa <b>Reiniciar odometría</b>.</td></tr>
+    <tr><td>La batería sale "—"</td><td>El cable de la batería al medidor (INA219) está suelto, o el interruptor está apagado.</td></tr>
+    <tr><td>El robot no responde después de "Liberar"</td><td>Espera 2 s: el sistema se recupera solo. Si no, repite el paso 3.</td></tr>
+  </table>
+
+  <div class="warn" style="margin-top:6mm"><b>Cuidados:</b> no dejes el robot encendido sin vigilancia. Desconecta la batería al guardarlo. No la cargues sin supervisión. Mantén los dedos lejos de las ruedas mientras se mueve.</div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>7</span></div>
+</section>
+
+<!-- ================= 8. EXTRA: SEÑALES ================= -->
+<section class="page">
+  <div class="sec-head"><span class="num">+</span><h2>Para curiosos: ver las señales</h2><span class="tag">Opcional</span></div>
+  <p class="lead">El robot mide su movimiento cientos de veces por segundo. Esas medidas vienen con "ruido" (pequeñas variaciones). La consola muestra cómo los <b>filtros</b> las limpian.</p>
+  <img class="shot" src="../img/manual_senales.png" alt="Sección Señales y Kalman">
+  <div class="grid3" style="margin-top:6mm">
+    <div class="card"><h3>Línea gris</h3><p>La medida tal como llega del sensor, con ruido.</p></div>
+    <div class="card"><h3 style="color:#1f7a52">Línea verde</h3><p>La misma medida limpia, con el <b>filtro de Kalman</b>.</p></div>
+    <div class="card"><h3>"Reducción"</h3><p>Cuánto ruido quitó el filtro, en %. Se ve mejor con el robot quieto.</p></div>
+  </div>
+  <div class="grid2" style="margin-top:6mm">
+    <div class="card"><h3>Guardar los datos</h3><p>Botón <b>CSV</b> para abrirlos en Excel. Botón <b>Imagen</b> para guardar las gráficas. <b>Pausar</b> congela la vista.</p></div>
+    <div class="card"><h3>Desde el celular</h3><p>La consola se adapta al celular: desliza hacia arriba para ver la telemetría bajo el dojo.</p></div>
+  </div>
+  <div class="foot"><span>CAR-LOSS · Manual de usuario</span><span>8</span></div>
+</section>
+
+</body>
+</html>

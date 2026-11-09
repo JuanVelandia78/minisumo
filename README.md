@@ -1,320 +1,175 @@
-# Minisumo teleoperado con ROS2
+<h1 align="center">CAR-LOSS · Minisumo teleoperado con ROS2</h1>
 
-Robot minisumo diferencial con **ESP32** (versión actual: ESP32 DevKit V1; la primera versión usó una ESP32-C3 Super Mini), controlado de forma inalámbrica desde un PC con **Linux y ROS2**, y un **guante** con ESP32 + MPU-6050 para manejarlo con la inclinación de la mano.
+<p align="center">
+  <img src="docs/img/robot_3d.png" width="300" alt="Robot CAR-LOSS">
+</p>
 
-El robot lee una IMU y dos encoders a **200 muestras/s**, filtra las señales en el microcontrolador (IIR en la IMU, media móvil en las ruedas), cierra un **PID de velocidad por rueda** más un **control de rumbo con el giroscopio**, estima su posición (odometría con fusión encoders + giroscopio) y envía todos los datos, crudos y filtrados, al PC por UDP.
+<p align="center">
+  Robot minisumo con <b>ESP32</b> que se maneja con un <b>guante inercial</b> o desde una <b>consola web 3D</b>, integrado con <b>ROS2</b>.<br>
+  Filtrado digital en el microcontrolador, <b>filtros de Kalman</b> en el PC, control de rumbo con giroscopio y navegación a coordenadas del dojo.
+</p>
 
-> El informe del proyecto está en [INFORME.md](INFORME.md).
+<p align="center">
+  <a href="INFORME.md"><b>Informe técnico</b></a> ·
+  <a href="docs/Manual_de_usuario_CAR-LOSS.pdf"><b>Manual de usuario (PDF)</b></a> ·
+  <a href="#puesta-en-marcha"><b>Puesta en marcha</b></a>
+</p>
 
 ---
+
+![Consola CAR-LOSS](docs/img/manual_vivo.png)
+
+## Qué hace
+
+- **Robot (ESP32 + PCB propia):**
+  - Lee la IMU, los encoders de cuadratura y la batería a **200 Hz**.
+  - Filtra en el microcontrolador: **IIR Butterworth** para la IMU y **media móvil** para las ruedas.
+  - Controla cada rueda con un **PI con prealimentación** y **mantiene el rumbo** con el giroscopio. Tras un empujón de +27° vuelve a su rumbo en ≈0,3 s.
+- **Guante (ESP32 + MPU-6050):** estima la inclinación de la mano con un **filtro complementario** y la envía como orden de movimiento.
+- **ROS2:**
+  - Puente UDP con el robot, cinemática diferencial y **tres filtros de Kalman**.
+  - **Ir a un punto** con un clic en el dojo, registro de datos y RViz2.
+- **Consola web:**
+  - Robot 3D del CAD sobre el dojo, telemetría y gráficas crudo frente a Kalman.
+  - Ajuste de ganancias en vivo, manejo manual y parada de emergencia.
+  - Funciona en el PC o en el celular, sin internet.
 
 ## Arquitectura
 
 ```mermaid
 flowchart LR
-    G["Guante<br/>ESP32 + MPU-6050"] <-- "UDP 8890<br/>GL,pitch,roll / GLP" --> GT[glove_teleop]
-    T["ros2 topic pub /<br/>teleop_twist_keyboard"] --> CV(["/cmd_vel"])
-    RT[routines] --> CV
-    GT --> CV
-    CV --> DK[diff_kinematics]
-    DK --> WC(["/wheel_cmd<br/>wl, wr rad/s"])
-    WC --> RB[robot_bridge]
-    RB -- "UDP 8888<br/>W,wl,wr" --> R["Robot<br/>ESP32"]
-    R -- "UDP 8889 anuncio<br/>telemetría 200 muestras/s" --> RB
-    RB --> TL(["/telemetry, /imu/raw, /imu/filtered,<br/>/wheels/speed, /odom"])
-    TL --> DL[data_logger → CSV]
+    G["Guante<br/>ESP32 + MPU-6050"] -- "UDP 8890" --> GT[glove_teleop]
+    GT -- /cmd_vel --> DK[diff_kinematics]
+    GO[goto_controller] -- /cmd_vel_auto --> DK
+    DK -- /wheel_cmd --> RB[robot_bridge]
+    RB <-- "UDP 8888 / 8889" --> R["Robot<br/>ESP32"]
+    RB -- "/imu/raw · /wheels/speed · /odom" --> KF[kalman_filter]
+    RB --> PS[panel_server]
+    KF --> PS
+    PS -- "/goal · /estop · /robot_cmd" --> RB
+    PS <-- WebSocket --> W(["Navegador"])
 ```
 
-| Nodo ROS2 | Función |
+| Nodo | Función |
 |---|---|
-| `robot_bridge` | Encuentra el robot por su anuncio UDP, le envía la velocidad de cada rueda a 50 Hz y publica la telemetría en tópicos ROS2 |
-| `diff_kinematics` | Modelo cinemático del robot diferencial: `/cmd_vel` (v, ω) → `/wheel_cmd` (ω izquierda, ω derecha) |
-| `data_logger` | Guarda toda la telemetría (cruda y filtrada) en un CSV |
-| `routines` | Ejecuta rutinas de movimiento conocidas y compara la posición final deseada con la estimada |
-| `glove_teleop` | Convierte la inclinación del guante en `/cmd_vel` |
-
----
+| `robot_bridge` | Encuentra el robot por su anuncio UDP, le envía la velocidad de cada rueda y publica la telemetría. Atiende la parada de emergencia |
+| `glove_teleop` | Inclinación de la mano → `/cmd_vel` |
+| `diff_kinematics` | (v, ω) → velocidad de cada rueda. Da prioridad al control automático |
+| `kalman_filter` | Kalman de la IMU, de las ruedas [ω, α] y de los ángulos de la mano [θ, sesgo] |
+| `goto_controller` | Lleva el robot a una coordenada (x, y) del dojo |
+| `panel_server` | Consola web: HTTP + WebSocket con la biblioteca estándar de Python, sin rosbridge |
+| `data_logger` · `routines` · `visualizer` · `signal_plotter` | CSV, rutinas de prueba, RViz2 y gráficas de matplotlib |
 
 ## Estructura del repositorio
 
 ```
-minisumo/
-├── firmware/
-│   ├── robot_esp32/    # robot, versión actual: ESP32 DevKit V1 + batería 3S (ESP-IDF 5.3.1)
-│   ├── robot/          # robot, primera versión: ESP32-C3 Super Mini + batería 2S
-│   └── guante/         # ESP32 DevKit + MPU-6050 (ESP-IDF 5.3.1)
-├── pcb/                # PCB del robot para la ESP32 DevKit (KiCad 10)
-├── ros2/
-│   └── minisumo_ros/   # paquete ROS2 (Python, ament_python)
-├── docs/
-│   └── cableado.html   # diagrama de conexiones físicas
-├── README.md
-└── INFORME.md
+firmware/
+  robot_esp32/     Firmware del robot (ESP-IDF 5.3.1, FreeRTOS): control a 200 Hz, filtros, UDP
+  guante/          Firmware del guante: complementario + Butterworth, UDP
+  robot/           Primera versión del robot (ESP32-C3), histórica
+ros2/minisumo_ros/ Paquete ROS2: nodos, launch, consola web (web/) y modelo 3D (meshes/)
+pcb/               PCB v11 en KiCad
+herramientas/      cad2rviz.py (STL de SolidWorks → ROS) y figuras_informe.py
+docs/              Manual de usuario (PDF), imágenes y diagrama de cableado
+INFORME.md         Informe técnico (procesamiento de señales y comunicaciones)
 ```
-
----
 
 ## Hardware
 
-### Robot, versión actual (`firmware/robot_esp32`)
-
-| Componente | Uso |
+| Bloque | Componente |
 |---|---|
-| ESP32 DevKit V1 (30 pines) | Control, filtrado, rumbo, WiFi; solo se usa la fila derecha de pines |
-| MPU-6050 (clon) | Acelerómetro y giroscopio |
-| TB6612FNG | Puente H (VM máximo 13,5 V) |
-| 2 motorreductores TT + ruedas de 65 mm | Tracción diferencial |
-| 2 encoders de herradura (LM393) + discos de 20 ranuras | Se cuenta solo el flanco de subida: 20 pulsos por vuelta |
-| Batería 3S (11,1–12,6 V) | Motores; el PWM se limita a 0,55 (~6,5 V en los motores de 6 V) |
-| Condensador cerámico de 100 nF en cada motor | Reduce el ruido que los motores inducen en los encoders |
+| Robot | ESP32 DevKit V1 · PCB v11 de una cara · DRV8833 · INA219 · MPU-6050 |
+| Motores | 2 motorreductores ≈100:1 con encoder magnético (2771 cuentas/vuelta) |
+| Geometría | ruedas de 30 mm (radio efectivo 16,2 mm) · 79 mm entre ruedas |
+| Batería | 2S Li-ion (7,4–8,4 V) |
+| Guante | ESP32 DevKit + MPU-6050 |
 
-**Pines de la ESP32 DevKit (cableado actual)**
+**Pines del robot (PCB v11):**
 
-| Señal | GPIO | Señal | GPIO |
-|---|---|---|---|
-| PWMA (motor izquierdo) | 5 | PWMB (motor derecho) | 23 |
-| AIN1 | 18 | BIN1 | 17 |
-| AIN2 | 19 | BIN2 | 16 |
-| Encoder izquierdo (D0) | 4 | Encoder derecho (D0, 1 kΩ en serie) | 15 |
-| SDA (MPU-6050) | 21 | SCL (MPU-6050) | 22 |
-| LED de la placa (WiFi conectado) | 2 | Libres (programación y monitor) | 1, 3 |
-
-> La PCB de `pcb/` usa otra asignación de pines, pensada para rutear sin cruces: PWMA 23, AIN2 22, AIN1 21, BIN1 19, BIN2 18, PWMB 5, ENC_L 17, SCL 16, SDA 4, ENC_R 15. Al montar el robot en la PCB hay que cambiar los pines en `config.h`.
-
-**Control con batería 3S.** Con 3S los encoders todavía cuentan pulsos falsos cuando los motores toman corriente, y el PID de cada rueda, persiguiendo esas lecturas, hacía zigzaguear al robot. Por eso el PID de rueda está apagado (`PID_KP` y `PID_KI` en 0): la velocidad la da la prealimentación (modelo del motor medido con 3S) y el **control de rumbo con el giroscopio** mantiene la dirección. Probado hasta 30 rad/s por rueda (~1 m/s) con menos de 6° de desvío. Para volver a usar el PID de rueda hay que filtrar los D0 en hardware (10 nF del pin a GND junto a la ESP32).
-
-### Robot, primera versión (`firmware/robot`)
-
-| Componente | Uso |
+| Función | Pines |
 |---|---|
-| ESP32-C3 Super Mini | Control, filtrado, PID, WiFi |
-| MPU-6050 (clon, WHO_AM_I = 0x70) | Acelerómetro ±4 g y giroscopio ±500 °/s |
-| TB6612FNG | Puente H de los dos motores |
-| 2 motorreductores TT + ruedas de 65 mm | Tracción diferencial |
-| 2 sensores de herradura (LM393) + discos de 20 ranuras | Encoders de un canal, 40 flancos por vuelta |
-| LM2596 | Regulador de la lógica |
-| Diodo 1N5819 | Evita que el USB y el LM2596 se alimenten entre sí |
-| LiPo 2S 7,4 V | Batería |
-| Capacitores 470 µF en VM, 103 en cada motor, 102 en VM | Filtrado de la alimentación de los motores |
-
-**Pines del ESP32-C3**
-
-| Señal | GPIO | Señal | GPIO |
-|---|---|---|---|
-| PWMA (motor izquierdo) | 5 | PWMB (motor derecho) | 10 |
-| AIN1 | 6 | BIN1 | 20 |
-| AIN2 | 7 | BIN2 | 21 |
-| Encoder izquierdo (D0) | 3 | Encoder derecho (D0) | 4 |
-| SDA (MPU-6050) | 8 | SCL (MPU-6050) | 9 |
-
-- STBY del TB6612 a 3,3 V.
-- Encoders y MPU-6050 alimentados a 3,3 V.
-- VM del TB6612 directo a la batería.
-- La consola del ESP va por el USB nativo, porque GPIO20 y 21 (UART0) se usan para el motor derecho.
-
-El diagrama completo está en [docs/cableado.html](docs/cableado.html).
-
-### Guante (ESP32 DevKit)
-
-| MPU-6050 | ESP32 |
-|---|---|
-| VCC | 3V3 |
-| GND | GND |
-| SDA | GPIO21 |
-| SCL | GPIO22 |
-| AD0 | GND |
-
-- **LED de la placa (GPIO2):** encendido cuando el guante está conectado al WiFi.
-- **Botón BOOT (GPIO0):** fija la posición actual de la mano como la neutra.
-- **Monitor serie:** 5 líneas por segundo con el cabeceo y el alabeo (absoluto, respecto al neutro y solo con acelerómetro), la temperatura del MPU y si envía directo al PC o por broadcast.
-
----
+| I²C | SDA 17 · SCL 16 |
+| Motor izquierdo | AIN1 33, AIN2 32 |
+| Motor derecho | BIN1 14, BIN2 13 |
+| Encoders | izquierdo 18/19 · derecho 21/22 |
+| Otros | STBY 26 · LED 2 |
 
 ## Puesta en marcha
 
-### 1. Credenciales del WiFi
+### 1. Red WiFi
 
-El robot, el guante y el PC deben estar en la **misma red**. En cada firmware, copia la plantilla y escribe tu red:
+El robot, el guante y el PC deben estar en la **misma red de 2,4 GHz**: la ESP32 no ve redes de 5 GHz. Crea tus credenciales a partir de la plantilla:
 
 ```bash
 cp firmware/robot_esp32/main/wifi_secrets.example.h firmware/robot_esp32/main/wifi_secrets.h
 cp firmware/guante/main/wifi_secrets.example.h      firmware/guante/main/wifi_secrets.h
 ```
 
-`wifi_secrets.h` está en `.gitignore`, así que nunca se sube al repositorio.
+`wifi_secrets.h` está en `.gitignore`.
 
 ### 2. Firmware (ESP-IDF 5.3.1)
 
 ```bash
-cd firmware/robot_esp32     # o firmware/guante
+cd firmware/robot_esp32      # o firmware/guante
 idf.py build flash monitor
 ```
 
-- Cada firmware trae su objetivo configurado en `sdkconfig.defaults` (`esp32` para el robot actual y el guante, `esp32c3` para la primera versión del robot).
-- Si la placa no entra sola en modo de programación (`Wrong boot mode detected`), mantén presionado **BOOT** mientras carga.
-- **Al encender cualquiera de los dos, déjalo quieto unos 2–3 s:** en ese tiempo calibra el giroscopio.
+- **Robot:** retira el MPU-6050 antes de flashear; con el MPU puesto la placa no entra en modo de carga.
+- **Guante:** mantén **BOOT** presionado mientras carga.
+- **Al encender cualquiera de los dos, déjalo quieto ≈2 s:** está calibrando el giroscopio.
 
-### 3. Paquete ROS2
-
-```bash
-mkdir -p ~/ros2_ws/src
-cp -r ros2/minisumo_ros ~/ros2_ws/src/
-cd ~/ros2_ws && colcon build --symlink-install && source install/setup.bash
-```
-
-Si el firewall está activo, abre los puertos UDP:
-```bash
-sudo ufw allow 8888:8890/udp
-```
-
----
-
-## Uso
-
-En cada terminal: `cd ~/ros2_ws && source install/setup.bash`.
+### 3. ROS2
 
 ```bash
-ros2 run minisumo_ros robot_bridge --ros-args -p cmd_timeout:=1.0     # espera hasta ver ~200 muestras/s
-ros2 run minisumo_ros diff_kinematics --ros-args -p omega_max:=30.0  # hasta 30 rad/s por rueda (~0,95 m/s)
+mkdir -p ~/ros2_ws/src && cp -r ros2/minisumo_ros ~/ros2_ws/src/
+cd ~/ros2_ws && colcon build --packages-select minisumo_ros && source install/setup.bash
+ros2 launch minisumo_ros visualizacion.launch.py guante:=true rviz:=false
 ```
 
-### Movimiento manual
+La consola queda en `http://<IP del PC con ROS2>:8080`.
 
-```bash
-# adelante 0,15 m/s
-ros2 topic pub -r 20 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.15}}" > /dev/null
-# atrás
-ros2 topic pub -r 20 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: -0.15}}" > /dev/null
-# girar en el sitio a la izquierda (z > 0) o a la derecha (z < 0)
-ros2 topic pub -r 20 /cmd_vel geometry_msgs/msg/Twist "{angular: {z: 3.0}}" > /dev/null
-```
+### 4. Máquina virtual (VirtualBox)
 
-- **Velocidad máxima probada:** `x` = 0,95 m/s (30 rad/s por rueda). La rampa tarda 1,2 s en llegar, así que hace falta espacio.
-- **Directo por rueda (rad/s):** `ros2 topic pub -r 20 /wheel_cmd std_msgs/msg/Float32MultiArray "{data: [15.0, 15.0]}"`.
-- Con Ctrl+C el robot se detiene solo en menos de 1 s.
+- **En modo puente (adaptador WiFi):** todo funciona directo.
+- **Si el hotspot no le da IP a la VM** (algunos celulares bloquean el tráfico en puente): usa **NAT** con estos reenvíos de puertos:
 
-### Guante
+| Nombre | Protocolo | Anfitrión | Invitado |
+|---|---|---|---|
+| robot | UDP | 8889 | 8889 |
+| guante | UDP | 8890 | 8890 |
+| panel | TCP | 8081 | 8080 |
 
-```bash
-ros2 run minisumo_ros glove_teleop --ros-args -p v_max:=0.6 -p w_max:=4.0 -p max_deg:=30.0 \
-    -p swap_axes:=true -p invert_pitch:=true -p invert_roll:=true
-```
+En NAT, la consola se abre en `http://localhost:8081` desde Windows.
 
-- **Adelante o atrás:** inclina la mano en esa dirección; con 30° va a la velocidad máxima.
-- **Girar:** ladea la mano más de 12° (`roll_deadzone_deg`). Con la mano muy inclinada adelante o atrás el giro se atenúa y desaparece pasando 60°, porque ahí el alabeo pierde sentido.
-- **Orientación del MPU en la mano:** `swap_axes` intercambia los ejes (si al inclinar adelante el robot gira), e `invert_pitch` / `invert_roll` invierten cada sentido. La línea de arriba corresponde al guante actual.
-- **Antes de manejar,** presiona BOOT con la mano en reposo para fijar el cero.
-- glove_teleop debe mostrar unos 50 paquetes/s. Si bajan, revisa que la mano no tape la antena de la ESP32.
+## Uso rápido
 
-### Registro de datos y rutinas
-
-```bash
-ros2 run minisumo_ros data_logger --ros-args -p nombre:=recta_v015
-ros2 run minisumo_ros routines --ros-args -p rutina:=recta -p distancia:=0.5 -p iteraciones:=3
-ros2 run minisumo_ros routines --ros-args -p rutina:=cuadrado -p distancia:=0.3
-ros2 run minisumo_ros routines --ros-args -p rutina:=arco -p radio:=0.2
-ros2 run minisumo_ros routines --ros-args -p rutina:=giro -p angulo:=90
-```
-
-- **Telemetría:** el registrador la guarda en `~/minisumo_datos/<nombre>_<fecha>.csv`.
-- **Rutinas:** cada iteración agrega a `~/minisumo_datos/rutinas.csv` la posición deseada y la estimada. La real se mide con cinta y se escribe a mano.
-
----
-
-## Protocolo UDP
-
-### PC → robot (puerto 8888, una línea de texto por datagrama)
-
-| Comando | Significado |
+| Acción | Cómo |
 |---|---|
-| `W,wl,wr` | Velocidad de cada rueda en rad/s (PID) |
-| `M,dl,dr` | Ciclo útil directo en [-1, 1] (lazo abierto, para pruebas) |
-| `S` | Detener |
-| `P` | Mantener vivo sin cambiar la orden |
-| `G,kp,ki,kd[,kff]` | Ganancias del PID de las ruedas |
-| `F,dmin_l,dmin_r[,trim]` | Zona muerta de cada motor y corrección máxima del PID |
-| `Y,kp,ki` | Control de rumbo con giroscopio (`Y,0,0` lo desactiva) |
-| `R` | Reiniciar odometría y contadores |
-| `C` | Recalibrar el giroscopio (robot quieto 2 s) |
-| `H` | Pedir la cabecera de la telemetría |
+| Manejar con el guante | Inclina la mano: adelante o atrás para avanzar, de lado para girar. **BOOT** fija el cero |
+| Manejar desde la consola | **Control → Manejo manual**: pad táctil o W A S D |
+| Ir a un punto | Robot en el centro del dojo mirando a +x → **Reiniciar odometría** → **Ir a punto** (G) → clic en el dojo |
+| Parar | Botón **PARAR** o la barra espaciadora. **Liberar** para seguir |
+| Ver los filtros | **Señales y Kalman**: crudo frente a Kalman, con σ y % de reducción |
 
-- **Por seguridad**, si pasan 700 ms sin recibir comandos (300 ms en la primera versión), el robot detiene los motores.
-- **Desde ROS2**, cualquier comando se puede enviar así:
-```bash
-ros2 topic pub --once /robot_cmd std_msgs/msg/String "{data: 'R'}"
-```
+Para usuarios no técnicos: [**Manual de usuario (PDF)**](docs/Manual_de_usuario_CAR-LOSS.pdf).
 
-### Robot → PC
+## Protocolo UDP (resumen)
 
-| Mensaje | Puerto | Formato |
+| Dirección | Puerto | Contenido |
 |---|---|---|
-| Anuncio | 8889, broadcast, 1 Hz | `MINISUMO,<ip>,8888` |
-| Telemetría | al puerto del último comando | 4 líneas `D,...` por paquete (200 muestras/s) |
+| Robot → PC (broadcast) | 8889 | `MINISUMO,<ip>,8888` cada 1 s |
+| PC → robot | 8888 | `W,wl,wr` · `S` · `G,…` · `F,…` · `Y,…` · `R` · `C` · `T` · `H` |
+| Robot → PC | (al emisor) | `H,…` cabecera de 33 columnas · `D,…` telemetría a 200 Hz, 6 líneas por paquete |
+| Guante → PC | 8890 | `GL,t,pitch,roll,…` a 50 Hz (unicast después de recibir `GLP`) |
 
-**Columnas de la telemetría (30):**
+El detalle está en el [informe](INFORME.md#6-comunicaciones).
 
-```
-t_ms, ax, ay, az, gx, gy, gz,                 IMU cruda (g, °/s)
-ax_f, ay_f, az_f, gx_f, gy_f, gz_f,           IMU filtrada (IIR)
-wl, wr, wl_f, wr_f,                           velocidad de las ruedas cruda y filtrada (rad/s)
-wl_ref, wr_ref, duty_l, duty_r,               referencia y ciclo útil aplicado
-ticks_l, ticks_r,                             flancos acumulados de los encoders
-x, y, theta, theta_enc, theta_gyro,           odometría (m, rad)
-filt_us, mode                                 tiempo de cómputo de los filtros, modo
-```
+## Documentación
 
-### Guante ↔ PC (puerto 8890, 50 Hz)
-
-```
-GL,t_ms,pitch,roll,pitch_raw,roll_raw          guante -> PC: ángulos en grados respecto a la posición neutra
-GLP                                            PC -> guante, cada 0,5 s: "envíame directo"
-```
-
-El guante empieza por broadcast. Cuando recibe `GLP` de glove_teleop, envía directo (unicast) a ese PC, y vuelve al broadcast si pasan 3 s sin aviso. Los hotspots de celular retienen o descartan los broadcast (llegaban 6–14 de 50 paquetes/s).
-
----
-
-## Parámetros principales
-
-### `firmware/robot_esp32/main/config.h` (versión actual, batería 3S)
-
-| Grupo | Parámetros |
-|---|---|
-| Lazo | `CONTROL_HZ 200`, `CMD_TIMEOUT_MS 700`, `PWM_FREQ_HZ 20000`, `PWM_MAX 0.55`, rampa `REF_ACCEL_MAX 25` rad/s² |
-| Encoders | `ENC_SLOTS 20`, solo flanco de subida, confirmación de 50 µs (`ENC_CONFIRM_US`), rechazo de flancos antes del 70 % del intervalo anterior (`ENC_GLITCH_PCT 70`, tope `ENC_GLITCH_MAX_US 80000`), `ENC_OMEGA_PHYS_MAX 40` |
-| Ruedas | prealimentación `PID_KFF 0.010`, zona muerta 0,10 (izquierda) y 0,09 (derecha); `PID_KP` y `PID_KI` en 0 |
-| Rumbo (en cascada, sobre la velocidad pedida a cada rueda) | `YAW_KP 1.0`, `YAW_KI 17.5`, `YAW_CORR_MAX 7.5` rad/s, `GYRO_Z_SIGN +1` |
-| Giroscopio | la calibración al arrancar se repite sola si el robot se movió (`GYRO_CAL_MAX_STD`) |
-
-### `firmware/robot/main/config.h` (primera versión, batería 2S)
-
-| Grupo | Parámetros |
-|---|---|
-| Lazo | `CONTROL_HZ 200`, `CMD_TIMEOUT_MS 300`, `PWM_FREQ_HZ 20000`, `PWM_MAX 0.70` |
-| Encoders | `ENC_SLOTS 20`, ambos flancos, `ENC_DEBOUNCE_US 4000`, rechazo adaptativo de rebotes |
-| PID de ruedas | `PID_KP 0.02`, `PID_KI 0.25`, `PID_KFF 0.02`, zona muerta 0,15 (izquierda) y 0,085 (derecha), `PID_TRIM 0.03` |
-| Rumbo | `YAW_KP 0.08`, `YAW_KI 1.00`, `YAW_CORR_MAX 0.30`, `GYRO_Z_SIGN -1` |
-| Filtros | IIR Butterworth de orden 2, fc = 20 Hz (`filter_coefs.h`); media móvil `MOVAVG_N 5` |
-| Arranque suave | `MOTOR_SLEW_PER_S 3.0` |
-
----
-
-## Problemas conocidos y soluciones
-
-| Síntoma | Causa | Solución |
-|---|---|---|
-| Telemetría en 0/s y el monitor muestra `PC esperando` | El hotspot cambió de subred y la VM quedó con la IP vieja | `sudo nmcli networking off && sudo nmcli networking on` |
-| `RTPS_TRANSPORT_SHM Error ... open_and_lock_file failed` | Quedaron archivos de memoria compartida de FastDDS de nodos cerrados con Ctrl+C | `ros2 daemon stop && rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*` (no afecta al robot) |
-| Con batería el LED azul se apaga y vuelve en ciclos | Caída de voltaje al arrancar los motores (reinicio por brownout) | Alimentar el ESP aparte (power bank) o poner un diodo y 1000 µF antes del LM2596; resistencias de 10 kΩ de PWMA y PWMB a GND |
-| Una rueda se queda quieta con orden de avanzar | Encoder con rebotes en el borde de una ranura | Ya resuelto en el firmware (piso de ciclo útil y rechazo de lecturas imposibles). Ajustar el potenciómetro del módulo y separar el cable D0 de los motores |
-| El robot gira sobre una rueda con el control de rumbo activo | Signo del giroscopio invertido | `GYRO_Z_SIGN` en `config.h` |
-| El puente encuentra al robot pero recibe 0 muestras/s | La VM quedó con una IP de otra red (`ping` responde desde 192.168…) | `nmcli networking off && nmcli networking on`, con la VM en modo puente sobre la tarjeta WiFi |
-| El robot avanza y frena a tirones, y cada vez se desvía hacia un lado distinto | Cortes de comandos por el WiFi del hotspot: al frenar se reinicia el control de rumbo | `CMD_TIMEOUT_MS 700` en el robot y `cmd_timeout:=1.0` en el puente; celular cargando, con la pantalla encendida y cerca |
-| Zigzag con batería 3S | Los encoders cuentan pulsos falsos (hasta 4 veces lo real) y el PID de rueda los persigue | Condensadores de 100 nF en los motores, PID de rueda apagado y rumbo con el giroscopio (versión actual) |
-| glove_teleop recibe pocos paquetes | Broadcast por un hotspot de celular, o la mano tapa la antena | Envío directo con `GLP` (ya incluido); antena de la ESP32 hacia afuera |
-| Con el guante, al inclinar adelante el robot gira | MPU montado girado 90° | `swap_axes:=true` y ajustar `invert_pitch` / `invert_roll` |
-
----
+- [**INFORME.md**](INFORME.md): procesamiento digital de señales (IIR, media móvil, complementario, Kalman), control, comunicaciones y ROS2, con resultados medidos.
+- [**Manual de usuario**](docs/Manual_de_usuario_CAR-LOSS.pdf): guía visual paso a paso.
+- [`docs/cableado.html`](docs/cableado.html): diagrama de cableado.
+- [`DESIGN.md`](DESIGN.md): sistema de diseño de la consola.
 
 ## Licencia
 

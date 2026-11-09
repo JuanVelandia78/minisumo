@@ -1,4 +1,4 @@
-// Robot minisumo teleoperado - ESP32 DevKit V1
+// Robot minisumo teleoperado - ESP32 DevKit V1 sobre la PCB_MiniSumo v11 (DRV8833 + INA219)
 // Lazo a 200 Hz: lectura de IMU y encoders, filtrado, PID de velocidad por rueda,
 // odometría y telemetría por UDP hacia el PC con ROS2.
 #include <stdio.h>
@@ -25,6 +25,8 @@
 #include "pid.h"
 #include "odometry.h"
 #include "net.h"
+#include "ina219.h"
+#include "selftest.h"
 
 static const char *TAG = "minisumo";
 
@@ -33,7 +35,7 @@ static const char *TAG = "minisumo";
 static const char TELEM_HEADER[] =
     "H,t_ms,ax,ay,az,gx,gy,gz,ax_f,ay_f,az_f,gx_f,gy_f,gz_f,"
     "wl,wr,wl_f,wr_f,wl_ref,wr_ref,duty_l,duty_r,ticks_l,ticks_r,"
-    "x,y,theta,theta_enc,theta_gyro,filt_us,mode\n";
+    "x,y,theta,theta_enc,theta_gyro,filt_us,mode,v_bat,i_bat,p_bat\n";
 
 // ---------------------------------------------------------------------------
 // Estado compartido entre la tarea de red (comandos) y el lazo de control
@@ -47,8 +49,8 @@ typedef struct {
     int64_t last_cmd_us;
     float kp, ki, kd, kff;
     float dmin_l, dmin_r, trim;  // zona muerta de cada motor y corrección máxima del PID
-    float yaw_kp, yaw_ki;        // control de rumbo con el giroscopio
-    bool gains_dirty, reset_odom, recal, send_header;
+    float yaw_kp, yaw_ki, yaw_kb; // control de rumbo con el giroscopio (giro, ángulo, integral del ángulo)
+    bool gains_dirty, reset_odom, recal, send_header, selftest;
 } cmd_state_t;
 
 static cmd_state_t s_cmd;
@@ -69,17 +71,22 @@ typedef struct {
     odom_t od;
     int32_t filt_us;
     int mode;
+    ina_sample_t bat;          // última lectura del INA219 (10 Hz)
 } telem_sample_t;
 
 static QueueHandle_t s_telem_q;
 static volatile bool s_hdr_req;
 static TaskHandle_t s_ctrl_task;
 static bool s_imu_ok;
+static bool s_ina_ok;
+static volatile ina_sample_t s_bat;   // copia para el mensaje de estado
+static volatile int s_selftest_fails;  // resultado del último autodiagnóstico
 
 static struct {
-    volatile uint32_t overruns, imu_errors, telem_drops;
+    volatile uint32_t overruns, imu_errors, telem_drops, ina_errors;
     volatile int32_t max_loop_us;
     volatile drive_mode_t mode;
+    volatile int32_t ticks_l, ticks_r;
 } s_stats;
 
 // ---------------------------------------------------------------------------
@@ -90,10 +97,11 @@ static struct {
 //   P              mantener vivo sin cambiar la orden
 //   G,kp,ki,kd[,kff]  ganancias del PID
 //   F,dmin_l,dmin_r[,trim]  zona muerta de cada motor y corrección máxima del PID
-//   Y,kp,ki        control de rumbo con el giroscopio (Y,0,0 lo desactiva)
+//   Y,kp,ki[,kb]   control de rumbo: kp al giro, ki al ángulo, kb integral del ángulo (Y,0,0,0 lo desactiva)
 //   R              reiniciar odometría y contadores
 //   C              recalibrar giroscopio (robot quieto, 2 s)
 //   H              pedir la cabecera de la telemetría
+//   T              repetir el autodiagnóstico (I2C, MPU, INA219/batería, puente H); informe en el monitor
 // ---------------------------------------------------------------------------
 static void on_cmd(const char *m, int len)
 {
@@ -157,10 +165,12 @@ static void on_cmd(const char *m, int len)
         }
         break;
     case 'Y':
-        if (sscanf(m, "Y,%f,%f", &a, &b) == 2) {
+        n = sscanf(m, "Y,%f,%f,%f", &a, &b, &c);
+        if (n >= 2) {
             portENTER_CRITICAL(&s_cmd_mux);
             s_cmd.yaw_kp = a;
             s_cmd.yaw_ki = b;
+            if (n == 3) s_cmd.yaw_kb = c;
             s_cmd.gains_dirty = true;
             portEXIT_CRITICAL(&s_cmd_mux);
         }
@@ -173,6 +183,11 @@ static void on_cmd(const char *m, int len)
     case 'C':
         portENTER_CRITICAL(&s_cmd_mux);
         s_cmd.recal = true;
+        portEXIT_CRITICAL(&s_cmd_mux);
+        break;
+    case 'T':
+        portENTER_CRITICAL(&s_cmd_mux);
+        s_cmd.selftest = true;
         portEXIT_CRITICAL(&s_cmd_mux);
         break;
     case 'H':
@@ -212,9 +227,12 @@ static void control_task(void *arg)
     odom_t od;
     odom_reset(&od);
     imu_sample_t imu = {0}, imf = {0};
-    float yaw_int = 0.0f;     // integral del control de rumbo
+    float yaw_ang = 0.0f;     // error de ángulo acumulado (rad): rumbo pedido - rumbo medido
+    float yaw_bias = 0.0f;    // integral lenta del error de ángulo (absorbe el patinaje / motores distintos)
     float ramp_l = 0.0f, ramp_r = 0.0f;   // velocidad pedida con rampa (REF_ACCEL_MAX)
     float slew_l = 0.0f, slew_r = 0.0f;   // último ciclo útil aplicado (arranque suave)
+    ina_sample_t bat = {0};
+    int ina_div = 0;
     esp_task_wdt_add(NULL);   // si el lazo se traba, el watchdog reinicia el ESP y apaga los motores
 
     while (1) {
@@ -226,20 +244,30 @@ static void control_task(void *arg)
         cmd_state_t cmd;
         portENTER_CRITICAL(&s_cmd_mux);
         cmd = s_cmd;
-        s_cmd.gains_dirty = s_cmd.reset_odom = s_cmd.recal = s_cmd.send_header = false;
+        s_cmd.gains_dirty = s_cmd.reset_odom = s_cmd.recal = s_cmd.send_header = s_cmd.selftest = false;
         portEXIT_CRITICAL(&s_cmd_mux);
 
         if (cmd.gains_dirty) {
             pid_init(&pid_l, cmd.kp, cmd.ki, cmd.kd, cmd.kff, cmd.dmin_l, cmd.trim, PWM_MAX);
             pid_init(&pid_r, cmd.kp, cmd.ki, cmd.kd, cmd.kff, cmd.dmin_r, cmd.trim, PWM_MAX);
-            ESP_LOGI(TAG, "PID: kp=%.4f ki=%.4f kd=%.4f kff=%.4f | zona muerta izq=%.3f der=%.3f | trim=%.3f | rumbo kp=%.3f ki=%.3f",
-                     cmd.kp, cmd.ki, cmd.kd, cmd.kff, cmd.dmin_l, cmd.dmin_r, cmd.trim, cmd.yaw_kp, cmd.yaw_ki);
+            ESP_LOGI(TAG, "PID: kp=%.4f ki=%.4f kd=%.4f kff=%.4f | zona muerta izq=%.3f der=%.3f | trim=%.3f | rumbo kp=%.3f ki=%.3f kb=%.3f",
+                     cmd.kp, cmd.ki, cmd.kd, cmd.kff, cmd.dmin_l, cmd.dmin_r, cmd.trim, cmd.yaw_kp, cmd.yaw_ki, cmd.yaw_kb);
         }
         if (cmd.reset_odom) {
             odom_reset(&od);
             enc_reset();
         }
         if (cmd.send_header) s_hdr_req = true;
+        if (cmd.selftest) {
+            // Usa el bus I2C y los motores, por eso corre aquí, en la tarea del lazo (~1,5 s)
+            pid_reset(&pid_l);
+            pid_reset(&pid_r);
+            slew_l = slew_r = ramp_l = ramp_r = 0.0f;
+            esp_task_wdt_reset();
+            s_selftest_fails = selftest_run(s_imu_ok, s_ina_ok);
+            esp_task_wdt_reset();
+            continue;
+        }
         if (cmd.recal && s_imu_ok) {
             motors_stop();
             pid_reset(&pid_l);
@@ -260,6 +288,20 @@ static void control_task(void *arg)
         enc_reading_t el, er;
         enc_update(ENC_LEFT, now, &el);
         enc_update(ENC_RIGHT, now, &er);
+        s_stats.ticks_l = el.ticks;
+        s_stats.ticks_r = er.ticks;
+        // INA219 a 10 Hz: comparte el bus con el MPU, por eso se lee en esta misma tarea
+        if (s_ina_ok && ++ina_div >= INA_READ_DIV) {
+            ina_div = 0;
+            if (ina_read(&bat) == ESP_OK) {
+                s_bat.v_bat = bat.v_bat;
+                s_bat.v_bus = bat.v_bus;
+                s_bat.i = bat.i;
+                s_bat.p = bat.p;
+            } else {
+                s_stats.ina_errors++;
+            }
+        }
 
         // --- Filtrado: IIR en la IMU, media móvil en las ruedas (se mide su tiempo de cómputo) ---
         int64_t tf0 = esp_timer_get_time();
@@ -292,10 +334,16 @@ static void control_task(void *arg)
                 float yaw_ref = WHEEL_RADIUS_M * (ref_r - ref_l) / WHEEL_BASE_M;
                 float yaw_meas = GYRO_Z_SIGN * imf.gz * DEG2RAD;
                 float e_yaw = yaw_ref - yaw_meas;
-                yaw_int += cmd.yaw_ki * e_yaw * CONTROL_DT;
-                if (yaw_int > YAW_CORR_MAX) yaw_int = YAW_CORR_MAX;
-                if (yaw_int < -YAW_CORR_MAX) yaw_int = -YAW_CORR_MAX;
-                float corr = cmd.yaw_kp * e_yaw + yaw_int;
+                // Mantener el rumbo: el error de ángulo se guarda sin saturar la corrección (hasta YAW_ANG_MAX)
+                // para que, tras un empujón, el robot vuelva a la dirección original; la integral lenta (kb)
+                // absorbe la diferencia constante entre ruedas (patinaje) y así el ángulo vuelve a cero.
+                yaw_ang += e_yaw * CONTROL_DT;
+                if (yaw_ang > YAW_ANG_MAX) yaw_ang = YAW_ANG_MAX;
+                if (yaw_ang < -YAW_ANG_MAX) yaw_ang = -YAW_ANG_MAX;
+                yaw_bias += cmd.yaw_kb * yaw_ang * CONTROL_DT;
+                if (yaw_bias > YAW_BIAS_MAX) yaw_bias = YAW_BIAS_MAX;
+                if (yaw_bias < -YAW_BIAS_MAX) yaw_bias = -YAW_BIAS_MAX;
+                float corr = cmd.yaw_kp * e_yaw + cmd.yaw_ki * yaw_ang + yaw_bias;
                 if (corr > YAW_CORR_MAX) corr = YAW_CORR_MAX;
                 if (corr < -YAW_CORR_MAX) corr = -YAW_CORR_MAX;
                 wl_ref -= corr;
@@ -304,7 +352,7 @@ static void control_task(void *arg)
                 if ((ref_l > 0 && wl_ref < 0) || (ref_l < 0 && wl_ref > 0)) wl_ref = 0;
                 if ((ref_r > 0 && wr_ref < 0) || (ref_r < 0 && wr_ref > 0)) wr_ref = 0;
             } else {
-                yaw_int = 0.0f;
+                yaw_ang = yaw_bias = 0.0f;
             }
             // Lazo interno: PID de velocidad de cada rueda
             dl = pid_update(&pid_l, wl_ref, wl_f, CONTROL_DT);
@@ -312,7 +360,7 @@ static void control_task(void *arg)
         } else {
             pid_reset(&pid_l);
             pid_reset(&pid_r);
-            yaw_int = 0.0f;
+            yaw_ang = yaw_bias = 0.0f;
             ramp_l = ramp_r = 0.0f;
             if (mode == MODE_OPEN) {
                 dl = cmd.duty_l;
@@ -332,11 +380,7 @@ static void control_task(void *arg)
             slew_r = dr;
         }
         motors_set(dl, dr, &al, &ar);
-        // Sentido del encoder: en modo velocidad, el de la referencia; en lazo abierto, el del PWM
-        float sl = (mode == MODE_VEL) ? ref_l : al;
-        float sr = (mode == MODE_VEL) ? ref_r : ar;
-        if (sl != 0.0f) enc_set_dir(ENC_LEFT, sl > 0 ? 1 : -1);
-        if (sr != 0.0f) enc_set_dir(ENC_RIGHT, sr > 0 ? 1 : -1);
+        // (los encoders de cuadratura ya dan el sentido de giro, no hace falta deducirlo del PWM)
 
         // --- Estimación de posición ---
         bool moving = al != 0.0f || ar != 0.0f || el.dtheta != 0.0f || er.dtheta != 0.0f;
@@ -352,7 +396,7 @@ static void control_task(void *arg)
             .wl = el.omega, .wr = er.omega, .wl_f = wl_f, .wr_f = wr_f,
             .ref_l = ref_l, .ref_r = ref_r, .al = al, .ar = ar,
             .ticks_l = el.ticks, .ticks_r = er.ticks, .od = od,
-            .filt_us = filt_us, .mode = (int)mode,
+            .filt_us = filt_us, .mode = (int)mode, .bat = bat,
         };
         if (xQueueSend(s_telem_q, &ts, 0) != pdTRUE) s_stats.telem_drops++;
 
@@ -385,18 +429,28 @@ static void telem_task(void *arg)
             net_send(TELEM_HEADER, sizeof(TELEM_HEADER) - 1);
         }
         if (xQueueReceive(s_telem_q, &s, pdMS_TO_TICKS(500)) == pdTRUE) {
-            // Una línea por muestra, TELEM_BATCH líneas por paquete
-            int room = (int)sizeof(pkt.data) - pkt.len;
-            int w = snprintf(pkt.data + pkt.len, room,
+            // Una línea por muestra, hasta TELEM_BATCH líneas por paquete
+            static char line[320];
+            int w = snprintf(line, sizeof(line),
                 "D,%lld,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,"
                 "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%ld,%ld,"
-                "%.4f,%.4f,%.4f,%.4f,%.4f,%ld,%d\n",
+                "%.4f,%.4f,%.4f,%.4f,%.4f,%ld,%d,%.3f,%.3f,%.3f\n",
                 s.t_ms, s.imu.ax, s.imu.ay, s.imu.az, s.imu.gx, s.imu.gy, s.imu.gz,
                 s.imf.ax, s.imf.ay, s.imf.az, s.imf.gx, s.imf.gy, s.imf.gz,
                 s.wl, s.wr, s.wl_f, s.wr_f, s.ref_l, s.ref_r, s.al, s.ar,
                 (long)s.ticks_l, (long)s.ticks_r,
-                s.od.x, s.od.y, s.od.theta, s.od.theta_enc, s.od.theta_gyro, (long)s.filt_us, s.mode);
-            if (w > 0 && w < room) pkt.len += w;
+                s.od.x, s.od.y, s.od.theta, s.od.theta_enc, s.od.theta_gyro, (long)s.filt_us, s.mode,
+                s.bat.v_bat, s.bat.i, s.bat.p);
+            if (w > 0 && w < (int)sizeof(line)) {
+                // Si la línea ya no cabe en el datagrama, se envía lo acumulado y se empieza otro
+                if (pkt.len + w > (int)sizeof(pkt.data)) {
+                    net_send(pkt.data, pkt.len);
+                    pkt.len = 0;
+                    nsamp = 0;
+                }
+                memcpy(pkt.data + pkt.len, line, w);
+                pkt.len += w;
+            }
             if (++nsamp >= TELEM_BATCH) {
                 net_send(pkt.data, pkt.len);
                 pkt.len = 0;
@@ -415,6 +469,19 @@ static void telem_task(void *arg)
                      net_ip_str(), net_connected() ? "ok" : "no", net_pc_known() ? "ok" : "esperando",
                      modes[s_stats.mode], (long)s_stats.max_loop_us, (unsigned long)s_stats.overruns,
                      (unsigned long)s_stats.imu_errors, (unsigned long)s_stats.telem_drops, tc);
+            ESP_LOGI(TAG, "Encoders: izq %ld ticks | der %ld ticks", (long)s_stats.ticks_l, (long)s_stats.ticks_r);
+            if (s_selftest_fails)
+                ESP_LOGE(TAG, "El autodiagnostico encontro %d falla(s): revisa el informe del arranque o manda T",
+                         s_selftest_fails);
+            if (s_ina_ok) {
+                if (s_bat.v_bat < BAT_ABSENT_V)
+                    ESP_LOGI(TAG, "Bateria 2S: sin conectar (las entradas del INA219 al aire dan lecturas sin sentido)");
+                else
+                    ESP_LOGI(TAG, "Bateria 2S: %.2f V | %.3f A | %.2f W | al DRV8833 %.2f V | INA err %lu",
+                             s_bat.v_bat, s_bat.i, s_bat.p, s_bat.v_bus, (unsigned long)s_stats.ina_errors);
+                if (s_bat.v_bat >= BAT_ABSENT_V && s_bat.v_bat < BAT_LOW_V)
+                    ESP_LOGW(TAG, "BATERIA BAJA (%.2f V): cargala antes de seguir", s_bat.v_bat);
+            }
             s_stats.max_loop_us = 0;
         }
     }
@@ -434,9 +501,16 @@ void app_main(void)
     enc_init();
 
     s_imu_ok = (mpu_init() == ESP_OK);
+    s_ina_ok = (ina_init() == ESP_OK);
+    if (!s_ina_ok) ESP_LOGE(TAG, "Sin INA219: v_bat, i_bat y p_bat se envían en 0");
+
+    // Autodiagnóstico de la PCB con el robot quieto; el LED lo indica (3 lentos = bien, 10 rápidos = fallas)
+    s_selftest_fails = selftest_run(s_imu_ok, s_ina_ok);
+    selftest_blink(s_selftest_fails);
+
     if (s_imu_ok) {
         ESP_LOGI(TAG, "Calibrando giroscopio: no mover el robot");
-        vTaskDelay(pdMS_TO_TICKS(1000));   // tiempo para soltar el robot después de encenderlo
+        vTaskDelay(pdMS_TO_TICKS(500));    // tiempo para soltar el robot después de encenderlo
         mpu_calibrate_gyro(GYRO_CAL_SAMPLES);
     } else {
         ESP_LOGE(TAG, "Sin IMU: se continúa con encoders solamente");
@@ -452,6 +526,7 @@ void app_main(void)
     s_cmd.trim = PID_TRIM;
     s_cmd.yaw_kp = YAW_KP;
     s_cmd.yaw_ki = YAW_KI;
+    s_cmd.yaw_kb = YAW_KB;
 
     s_telem_q = xQueueCreate(64, sizeof(telem_sample_t));   // ~0.3 s de margen si el WiFi se atasca
     net_start(on_cmd);
