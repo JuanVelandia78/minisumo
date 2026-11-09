@@ -1,4 +1,4 @@
-// Configuración general del robot minisumo (ESP32 DevKit V1, solo la fila de pines derecha)
+// Configuración general del robot minisumo (ESP32 DevKit V1 sobre la PCB_MiniSumo v11)
 #pragma once
 
 // ---------------------------------------------------------------------------
@@ -13,23 +13,22 @@
 // ---------------------------------------------------------------------------
 // Pines (ver diagrama de cableado)
 // ---------------------------------------------------------------------------
-// Todos en la fila derecha de la DevKit. Libres a propósito:
-//   GPIO1 y GPIO3: UART0, la usan la carga del programa y el monitor
-//   GPIO2: LED azul de la placa (indica el WiFi); debe estar en bajo al arrancar para poder programar
-// GPIO5 y GPIO15 son pines de arranque inofensivos: al encender pueden dar pulsos, pero el motor
-// no gira porque AIN/BIN arrancan en bajo.
-#define PIN_I2C_SDA         21                 // I2C estándar de la DevKit
-#define PIN_I2C_SCL         22
+// Pines según la PCB_MiniSumo v11 (una cara, DRV8833 rojo, INA219, MPU-6050, encoders de cuadratura)
+//   GPIO1 y GPIO3: UART0 (carga del programa y monitor). GPIO2: LED azul de la placa (WiFi).
+#define PIN_I2C_SDA         17                 // bus I2C compartido: MPU-6050 (0x68) e INA219 (0x40)
+#define PIN_I2C_SCL         16
 
-#define PIN_PWMA            5                  // motor izquierdo (A)
-#define PIN_AIN1            18
-#define PIN_AIN2            19
-#define PIN_PWMB            23                 // motor derecho (B)
-#define PIN_BIN1            17
-#define PIN_BIN2            16
+// DRV8833: no tiene pin de PWM aparte, el PWM se aplica en los pines IN (resistencias de 220 ohm en serie)
+#define PIN_AIN1            33                 // motor izquierdo (salidas AO1/AO2)
+#define PIN_AIN2            32
+#define PIN_BIN1            14                 // motor derecho (salidas BO1/BO2)
+#define PIN_BIN2            13
+#define PIN_STBY            26                 // nSLEEP del DRV8833: en alto = puente H activo
 
-#define PIN_ENC_L           4                  // sensor de herradura izquierdo
-#define PIN_ENC_R           15                 // sensor de herradura derecho
+#define PIN_ENC_L_C1        18                 // encoder izquierdo, canal C1 (A)
+#define PIN_ENC_L_C2        19                 // encoder izquierdo, canal C2 (B)
+#define PIN_ENC_R_C1        21                 // encoder derecho, canal C1 (A)
+#define PIN_ENC_R_C2        22                 // encoder derecho, canal C2 (B)
 #define PIN_LED             2                  // LED de la placa: encendido = WiFi conectado
 
 // ---------------------------------------------------------------------------
@@ -41,65 +40,82 @@
 #define CMD_TIMEOUT_MS      700                // sin comandos en este tiempo -> motores detenidos (tolera cortes cortos del WiFi)
 
 // ---------------------------------------------------------------------------
-// Motores (TB6612FNG + motorreductores TT)
+// Motores (DRV8833 + motorreductores con encoder, batería 2S a través del INA219)
 // ---------------------------------------------------------------------------
 #define PWM_FREQ_HZ         20000
 #define PWM_RES_BITS        10
-#define PWM_MAX             0.55f              // límite de ciclo útil: motores de 6 V con batería 3S (12,6 V) -> ~6,5 V
-#define MOTOR_L_INVERT      0                  // poner 1 si el motor gira al revés
+#define PWM_MAX             0.70f              // límite de ciclo útil: motores de 6 V con batería 2S (8,4 V) -> ~5,9 V
+#define MOTOR_L_INVERT      1                  // poner 1 si el motor gira al revés
 #define MOTOR_R_INVERT      0
-// Aislamiento con optoacopladores: el 6N137 invierte la señal (LED encendido = salida en bajo),
-// así que el PWM se genera invertido para que al TB6612 le llegue el ciclo útil correcto.
-// Poner 0 si el ESP se conecta directo al TB6612, sin optoacopladores.
-#define PWM_OUTPUT_INVERT   0
+#define MOTOR_SLOW_DECAY    1                  // 1: en el tiempo apagado del PWM el motor frena (como el TB6612,
+                                               // velocidad más lineal con el ciclo útil). 0: queda libre (fast decay)
 #define MOTOR_SLEW_PER_S    3.0f               // arranque suave: el ciclo útil cambia como máximo 3/s (0 -> 0,3 en 100 ms)
 #define REF_ACCEL_MAX       25.0f              // rampa de la velocidad pedida en rad/s² (0 -> 5 rad/s en 0,2 s): las dos ruedas
                                                // arrancan juntas y el robot no se tuerce al salir
 
 // ---------------------------------------------------------------------------
-// Encoders de herradura (un solo canal, sin sentido de giro)
+// Encoders de cuadratura del motor (C1/C2), leídos por el contador PCNT en x4
 // ---------------------------------------------------------------------------
-#define ENC_SLOTS           20                 // ranuras del disco
-#define ENC_BOTH_EDGES      0                  // 0: solo subida (20 pulsos/vuelta). Con 1 la ranura y el diente del disco
-                                               // no miden igual: los intervalos se alternan y la velocidad salta
-#define ENC_DEBOUNCE_US     4000               // ignora flancos más cercanos que esto (permite hasta ~39 rad/s reales)
-#define ENC_OMEGA_PHYS_MAX  40.0f              // rad/s: una lectura mayor es físicamente imposible -> ruido
-#define ENC_CONFIRM_US      50                 // el pin debe seguir en alto 50 us después del flanco (descarta ruido de los motores)
-#define ENC_GLITCH_PCT      70                 // rechaza flancos que llegan antes del 70 % del intervalo anterior: el LM393
-                                               // tiembla en el borde de la ranura y con ruido daba un pulso extra por ranura
-#define ENC_GLITCH_MAX_US   80000              // tope del umbral adaptativo (a baja velocidad hay ~60 ms entre ranuras)
-#define ENC_STOP_TIMEOUT_US 150000             // sin flancos en este tiempo -> velocidad 0
+// Pulsos por vuelta de la RUEDA = ENC_PPR * 4 * ENC_GEAR_RATIO. Verificar: comando R, girar la rueda
+// una vuelta a mano y leer ticks_l / ticks_r en la telemetría; ese número es ENC_COUNTS_PER_REV.
+#define ENC_PPR             11                 // pulsos por vuelta del eje del motor, por canal (ver hoja del motor)
+#define ENC_GEAR_RATIO      34.0f              // reducción de la caja (ver la etiqueta del motor)
+#define ENC_COUNTS_PER_REV  2771.0f            // MEDIDO (2026-11-08): 10 vueltas a mano, izq 2779 / der 2763 (~7 PPR x 4 x 100:1)
+#define ENC_L_INVERT        1                  // poner 1 si con M,0.3,0.3 los ticks de esa rueda bajan
+#define ENC_R_INVERT        0
+#define ENC_GLITCH_NS       1000               // filtro del PCNT: ignora pulsos de menos de 1 us (ruido de los motores)
 
 // ---------------------------------------------------------------------------
 // Geometría del robot (medir y ajustar)
 // ---------------------------------------------------------------------------
-#define WHEEL_RADIUS_M      0.0325f            // rueda TT de 65 mm
-#define WHEEL_BASE_M        0.085f             // distancia entre los centros de las ruedas
+#define WHEEL_RADIUS_M      0.0162f            // efectivo: ruedas de ~30 mm, calibrado con recorrido de 33 cm (rueda der.)
+#define WHEEL_BASE_M        0.079f             // entre centros de las ruedas (ensamblaje de SolidWorks)
 
 // ---------------------------------------------------------------------------
 // PID de velocidad por rueda (ajustables en línea con el comando G)
 // ---------------------------------------------------------------------------
-#define OMEGA_MAX           25.0f              // rad/s aproximados de la rueda con PWM_MAX (ajustado con las mediciones)
-#define PID_KP              0.000f             // apagado con 3S: los encoders aún cuentan ruido de los motores y el PID
-                                               // de rueda producía el zigzag. La velocidad la da la prealimentación
-#define PID_KI              0.000f             // y el rumbo lo mantiene el giroscopio. Subir con cuidado si se filtran los D0
+#define OMEGA_MAX           13.5f              // rad/s de la rueda con PWM_MAX (medido en el aire con 2S, 2771 cuentas/vuelta)
+#define PID_KP              0.020f             // PI de velocidad de rueda (ajustado en el piso con 2S, 2026-11-08)
+#define PID_KI              0.400f             // el rumbo lo mantiene el giroscopio (lazo externo)
 #define PID_KD              0.000f
-#define PID_KFF             0.010f             // prealimentación: ciclo útil por rad/s por encima de la zona muerta
+#define PID_KFF             0.045f             // prealimentación: ciclo útil por rad/s (medido: ~22 rad/s por unidad de duty)
 // Zona muerta de cada motor: los motores TT no son iguales (el derecho gira más con el mismo PWM).
 // La prealimentación de cada rueda es  kff*ref + duty_min  y el PID solo corrige ±PID_TRIM alrededor
 // de ella, así un encoder ruidoso no puede frenar ni disparar la rueda. Ajustables en vivo con F.
-#define PID_DUTY_MIN_L      0.10f              // motor izquierdo: necesita más PWM para arrancar
-#define PID_DUTY_MIN_R      0.09f              // motor derecho: arranca con menos PWM
+#define PID_DUTY_MIN_L      0.052f             // zona muerta motor izquierdo (curva medida 2026-11-08)
+#define PID_DUTY_MIN_R      0.041f             // zona muerta motor derecho
 // Control de rumbo con el giroscopio: compara el giro real (gz) con el pedido por las ruedas y
 // reparte una corrección entre las velocidades pedidas a las ruedas (control en cascada). Hace que
 // vaya recto aunque los motores no sean iguales. Ajustable en vivo con Y,kp,ki (Y,0,0 lo desactiva).
 // Unidades: rad/s de rueda por rad/s de giro (afinados con 2S; ver pruebas con 3S).
-#define YAW_KP              1.0f
-#define YAW_KI              17.5f
-#define YAW_CORR_MAX        7.5f               // rad/s de rueda (equivale a 0,15 de ciclo útil)
+#define YAW_KP              1.5f               // rad/s de rueda por rad/s de error de giro (amortigua)
+#define YAW_KI              40.0f              // rad/s de rueda por rad de error de ángulo (devuelve al rumbo)
+#define YAW_KB              20.0f              // integral del ángulo: absorbe el patinaje / motores distintos
+#define YAW_ANG_MAX         0.8f               // rad (~45°): error de ángulo máximo que se recuerda
+#define YAW_BIAS_MAX        3.0f               // rad/s de rueda: compensación máxima de diferencia entre ruedas
+#define YAW_CORR_MAX        6.0f               // rad/s de rueda: corrección total máxima (~0,27 de ciclo útil)
 
 // corrección máxima de ciclo útil
 #define PID_TRIM            0.15f              // corrección máxima del PID sobre la prealimentación
+
+// ---------------------------------------------------------------------------
+// INA219: voltaje y corriente de la batería 2S (Vin+ = batería, Vin- = VM del DRV8833)
+// ---------------------------------------------------------------------------
+#define INA_ADDR            0x40               // A0 y A1 a GND
+#define INA_SHUNT_OHM       0.1f               // resistencia R100 del módulo
+#define INA_READ_DIV        20                 // se lee cada 20 periodos de control -> 10 Hz
+#define BAT_LOW_V           6.6f               // 2S: por debajo de 3,3 V por celda se avisa en el monitor
+#define BAT_ABSENT_V        3.0f               // por debajo de esto se toma como batería sin conectar (entradas al aire)
+
+// ---------------------------------------------------------------------------
+// Autodiagnóstico al arrancar (y con el comando T)
+// ---------------------------------------------------------------------------
+// El puente H se prueba con un pulso corto y suave a cada motor en cada sentido: con el INA219 se
+// mira que circule corriente. Es tan corto que la rueda casi no se mueve (puede oírse un clic).
+#define SELFTEST_MOTORS     1                  // 0: no mover los motores en el autodiagnóstico
+#define SELFTEST_DUTY       0.15f              // ciclo útil del pulso de prueba
+#define SELFTEST_PULSE_MS   40                 // duración del pulso
+#define SELFTEST_I_MIN      0.008f             // A: corriente mínima que debe subir para dar el motor por bueno
 
 // ---------------------------------------------------------------------------
 // IMU MPU-6050

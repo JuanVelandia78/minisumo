@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1613">
+<title>CAR-LOSS · Consola</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230e0e0f' stroke='%23ece6dc' stroke-width='3'/%3E%3Crect x='12' y='9' width='3' height='14' fill='%238c5b3b'/%3E%3Crect x='17' y='9' width='3' height='14' fill='%238c5b3b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="stylesheet" href="app.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body data-view="vivo">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-vivo" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.25"/><circle cx="10" cy="10" r="2.25"/></symbol>
+  <symbol id="i-senales" viewBox="0 0 20 20"><path d="M2.75 11.5c1.6 0 1.9-5 3.4-5s1.9 8 3.6 8 1.9-6 3.5-6 1.6 3 4 3"/></symbol>
+  <symbol id="i-control" viewBox="0 0 20 20"><path d="M4 3.5v13M10 3.5v13M16 3.5v13"/><path d="M2.5 13h3M8.5 7h3M14.5 11h3"/></symbol>
+  <symbol id="i-guante" viewBox="0 0 20 20"><path d="M6.5 17.25v-3.5L4 10.5V8.25a1.25 1.25 0 0 1 2.5 0V10M6.5 10V4.25a1.25 1.25 0 0 1 2.5 0V9M9 9V3.25a1.25 1.25 0 0 1 2.5 0V9M11.5 9V4.25a1.25 1.25 0 0 1 2.5 0V12c0 2.5-1 3.5-1.5 4.25v1"/></symbol>
+  <symbol id="i-sistema" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="9.5" rx="1"/><path d="M7 16.5h6M10 13.5v3"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 20 20"><path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9M4.5 3.75V6.5h2.75"/><circle cx="10" cy="10" r="1.25"/></symbol>
+  <symbol id="i-gyro" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.75"/><path d="M10 3.25v3M10 13.75v3M3.25 10h3M13.75 10h3"/></symbol>
+  <symbol id="i-test" viewBox="0 0 20 20"><path d="M4 10.5l3.5 3.5L16 5.5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 20 20"><path d="M7 4.5v11M13 4.5v11"/></symbol>
+  <symbol id="i-play" viewBox="0 0 20 20"><path d="M6.5 4.5l9 5.5-9 5.5z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 20 20"><path d="M10 3.5v10M5.5 9.5l4.5 4.5 4.5-4.5M4 16.5h12"/></symbol>
+  <symbol id="i-goal" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5"/><circle cx="10" cy="10" r="2.5"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/></symbol>
+  <symbol id="i-img" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1"/><path d="M3.5 14l4-4 3 3 2-2 4 3.5"/></symbol>
+</svg>
+
+<header class="bar">
+  <div class="mark" aria-label="CAR-LOSS">CAR<span class="mark-dot"></span>LOSS</div>
+  <div class="links" role="status" aria-live="polite">
+    <span class="link" id="link-robot" data-state="off"><i></i><svg class="ic link-ic" aria-hidden="true"><use href="#i-vivo"/></svg><b>Robot</b><span class="link-v">sin datos</span></span>
+    <span class="link" id="link-glove" data-state="off"><i></i><svg class="ic link-ic" aria-hidden="true"><use href="#i-guante"/></svg><b>Guante</b><span class="link-v">sin datos</span></span>
+    <span class="link link-mode" id="link-mode"><b>Modo</b><span class="link-v">—</span></span>
+  </div>
+  <button class="stop" id="btn-stop" type="button" aria-pressed="false">
+    <svg class="ic"><use href="#i-stop"/></svg><span class="stop-l">Parar</span><kbd>Espacio</kbd>
+  </button>
+</header>
+
+<div class="estop-banner" id="estop-banner" hidden>
+  <span>Parada de emergencia activa: el robot ignora el guante y el manejo manual.</span>
+  <button type="button" id="btn-release">Liberar</button>
+</div>
+
+<nav class="rail" aria-label="Secciones">
+  <div class="rail-group" role="tablist">
+    <button class="tab" role="tab" data-go="vivo" aria-selected="true"><svg class="ic"><use href="#i-vivo"/></svg><span>En vivo</span><kbd>1</kbd></button>
+    <button class="tab" role="tab" data-go="senales"><svg class="ic"><use href="#i-senales"/></svg><span>Señales y Kalman</span><kbd>2</kbd></button>
+    <button class="tab" role="tab" data-go="control"><svg class="ic"><use href="#i-control"/></svg><span>Control y ganancias</span><kbd>3</kbd></button>
+    <button class="tab" role="tab" data-go="guante"><svg class="ic"><use href="#i-guante"/></svg><span>Guante</span><kbd>4</kbd></button>
+    <button class="tab" role="tab" data-go="sistema"><svg class="ic"><use href="#i-sistema"/></svg><span>Sistema</span><kbd>5</kbd></button>
+  </div>
+  <div class="rail-actions">
+    <h2 class="rail-h">Acciones rápidas</h2>
+    <button class="act" data-cmd="R" data-msg="Odometría reiniciada"><svg class="ic"><use href="#i-reset"/></svg><span>Reiniciar odometría</span></button>
+    <button class="act" data-cmd="C" data-msg="Recalibrando giroscopio (2 s, no muevas el robot)"><svg class="ic"><use href="#i-gyro"/></svg><span>Recalibrar giroscopio</span></button>
+    <button class="act" data-cmd="T" data-msg="Autodiagnóstico enviado: el informe sale en el monitor serie"><svg class="ic"><use href="#i-test"/></svg><span>Autodiagnóstico</span></button>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- ============ EN VIVO ============ -->
+<section class="view view-vivo" id="v-vivo" aria-label="En vivo">
+  <div class="stage" id="stage">
+    <canvas id="scene" aria-label="Robot sobre el dojo en 3D"></canvas>
+    <div class="stage-views" role="group" aria-label="Cámara">
+      <button type="button" data-cam="dojo" aria-pressed="true">Dojo</button>
+      <button type="button" data-cam="top" aria-pressed="false">Cenital</button>
+      <button type="button" data-cam="follow" aria-pressed="false">Seguir</button>
+    </div>
+    <button type="button" class="goal-btn" id="btn-goal" aria-pressed="false"><svg class="ic"><use href="#i-goal"/></svg><span>Ir a punto</span><kbd>G</kbd></button>
+    <p class="goal-hint" id="goal-hint" hidden>Clic en el dojo para fijar el objetivo · <kbd>Esc</kbd> sale</p>
+    <div class="edge" id="edge" data-level="ok">
+      <span class="edge-l">Al borde</span>
+      <span class="edge-v"><b id="edge-v">—</b><small>cm</small></span>
+    </div>
+    <div class="stage-legend">
+      <span><i class="lg-real"></i>Rumbo real <b id="lg-real">—</b></span>
+      <span><i class="lg-cmd"></i>Rumbo pedido <b id="lg-cmd">—</b></span>
+      <span class="lg-dim">Dohyō Ø 77 cm</span>
+    </div>
+    <div class="stage-empty" id="stage-empty">
+      <p class="se-t">Esperando al robot</p>
+      <p class="se-d">Enciende el robot: el puente lo encuentra solo por su anuncio en el puerto 8889.</p>
+    </div>
+  </div>
+
+  <aside class="telemetry" aria-label="Telemetría">
+    <div class="mod mod-speed">
+      <h3 class="lab">Velocidad</h3>
+      <p class="big"><span id="t-v">—</span><small>cm/s</small></p>
+      <canvas class="hist" id="h-v" height="44" aria-label="Velocidad, últimos 20 s"></canvas>
+    </div>
+    <div class="mod mod-head">
+      <h3 class="lab">Rumbo</h3>
+      <p class="mid"><span id="t-th">—</span><small>°</small></p>
+      <p class="sub">error <b id="t-err">—</b></p>
+    </div>
+    <div class="mod mod-turn">
+      <h3 class="lab">Giro</h3>
+      <p class="mid"><span id="t-gz">—</span><small>°/s</small></p>
+      <p class="sub">pos <b id="t-pos">—</b></p>
+    </div>
+    <div class="mod mod-wheel">
+      <h3 class="lab">Rueda izquierda</h3>
+      <p class="mid"><span id="t-wl">—</span><small>rad/s</small></p>
+      <div class="meter" id="m-wl"><span class="m-meas"></span><span class="m-ref"></span></div>
+      <p class="sub">pedido <b id="t-wlr">—</b> · ciclo <b id="t-dl">—</b></p>
+    </div>
+    <div class="mod mod-wheel">
+      <h3 class="lab">Rueda derecha</h3>
+      <p class="mid"><span id="t-wr">—</span><small>rad/s</small></p>
+      <div class="meter" id="m-wr"><span class="m-meas"></span><span class="m-ref"></span></div>
+      <p class="sub">pedido <b id="t-wrr">—</b> · ciclo <b id="t-dr">—</b></p>
+    </div>
+    <div class="mod mod-bat" id="mod-bat" data-level="none">
+      <h3 class="lab">Batería 2S</h3>
+      <p class="mid"><span id="t-vb">—</span><small>V</small></p>
+      <p class="sub"><b id="t-ib">—</b> mA · <b id="t-pb">—</b> W</p>
+    </div>
+    <div class="mod mod-order">
+      <h3 class="lab">Orden <span id="t-src" class="src">—</span></h3>
+      <p class="mid"><span id="t-cv">—</span><small>cm/s</small></p>
+      <p class="sub">giro <b id="t-cw">—</b> rad/s</p>
+    </div>
+    <div class="mod mod-goal" id="mod-goal" data-state="libre">
+      <h3 class="lab">Objetivo <span class="goal-state" id="g-state">sin objetivo</span></h3>
+      <div class="goal-row">
+        <p class="mid"><span id="g-dist">—</span><small>cm</small></p>
+        <p class="sub">destino <b id="g-xy">—</b></p>
+        <button type="button" class="btn ghost" id="btn-goal-cancel" disabled>Cancelar <kbd>Esc</kbd></button>
+      </div>
+      <p class="sub goal-detail" id="g-detail">Pon el robot en el centro mirando a +x, pulsa Reiniciar odometría y usa Ir a punto.</p>
+    </div>
+    <div class="mod mod-log">
+      <h3 class="lab">Eventos</h3>
+      <ol class="log" id="log" aria-live="polite"></ol>
+    </div>
+  </aside>
+</section>
+
+<!-- ============ SEÑALES ============ -->
+<section class="view view-senales" id="v-senales" aria-label="Señales y Kalman" hidden>
+  <div class="toolbar">
+    <h2 class="vh">Señales crudas frente al filtro de Kalman</h2>
+    <div class="tb-right">
+      <div class="seg" role="group" aria-label="Ventana de tiempo">
+        <button type="button" data-win="5">5 s</button>
+        <button type="button" data-win="10" aria-pressed="true">10 s</button>
+        <button type="button" data-win="20">20 s</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="chk-fw"><span>Filtro del ESP32</span></label>
+      <button type="button" class="btn" id="btn-pause"><svg class="ic"><use href="#i-pause"/></svg><span>Pausar</span></button>
+      <button type="button" class="btn" id="btn-csv"><svg class="ic"><use href="#i-down"/></svg><span>CSV</span></button>
+      <button type="button" class="btn" id="btn-png"><svg class="ic"><use href="#i-img"/></svg><span>Imagen</span></button>
+    </div>
+  </div>
+  <div class="plots" id="plots"></div>
+  <p class="foot">Gris: medida cruda · <span class="k-ink">verde: Kalman en el PC</span> · <span class="fw-ink">arcilla: filtro del ESP32</span>. La reducción compara la desviación estándar en la ventana visible; con el sensor quieto mide cuánto ruido quita el filtro.</p>
+</section>
+
+<!-- ============ CONTROL ============ -->
+<section class="view view-control" id="v-control" aria-label="Control y ganancias" hidden>
+  <div class="ctl-grid">
+    <form class="panel gains" id="g-pid" data-cmd="G" autocomplete="off">
+      <h2 class="vh">PID de cada rueda</h2>
+      <p class="hint">Velocidad de rueda en cascada bajo el control de rumbo. <code>G,kp,ki,kd,kff</code></p>
+      <div class="fields"></div>
+      <div class="form-actions"><button type="button" class="btn ghost" data-reset>Valores del firmware</button><button type="submit" class="btn primary">Aplicar al robot</button></div>
+    </form>
+    <form class="panel gains" id="g-yaw" data-cmd="Y" autocomplete="off">
+      <h2 class="vh">Control de rumbo</h2>
+      <p class="hint">Mantiene el ángulo con el giroscopio y lo recupera tras un empujón. <code>Y,kp,ki,kb</code></p>
+      <div class="fields"></div>
+      <div class="form-actions"><button type="button" class="btn ghost" data-reset>Valores del firmware</button><button type="submit" class="btn primary">Aplicar al robot</button></div>
+    </form>
+    <form class="panel gains" id="g-dz" data-cmd="F" autocomplete="off">
+      <h2 class="vh">Zona muerta de los motores</h2>
+      <p class="hint">Ciclo útil mínimo para que cada motor arranque y corrección máxima del PID. <code>F,izq,der,trim</code></p>
+      <div class="fields"></div>
+      <div class="form-actions"><button type="button" class="btn ghost" data-reset>Valores del firmware</button><button type="submit" class="btn primary">Aplicar al robot</button></div>
+    </form>
+    <div class="panel drive">
+      <h2 class="vh">Manejo manual</h2>
+      <p class="hint">Arrastra dentro del círculo o usa <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / flechas. Suelta y el robot se detiene. Apaga el guante para que no compitan.</p>
+      <div class="pad-wrap">
+        <div class="pad" id="pad" tabindex="0" aria-label="Pad de manejo: arrastra para mover el robot"><span class="pad-knob" id="pad-knob"></span><span class="pad-ax pad-x"></span><span class="pad-ax pad-y"></span></div>
+        <div class="pad-read">
+          <p class="lab">Orden manual</p>
+          <p class="mid"><span id="d-v">0,0</span><small>cm/s</small></p>
+          <p class="sub">giro <b id="d-w">0,00</b> rad/s</p>
+          <label class="rng"><span>Límite <b id="d-lim-v">60</b> %</span><input type="range" id="d-lim" min="20" max="100" step="5" value="60"></label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="foot">Las ganancias se aplican solo en la RAM del ESP32 y se pierden al reiniciarlo; para dejarlas fijas hay que cambiarlas en <code>config.h</code> y flashear.</p>
+</section>
+
+<!-- ============ GUANTE ============ -->
+<section class="view view-guante" id="v-guante" aria-label="Guante" hidden>
+  <div class="glove-grid">
+    <div class="panel dial-panel">
+      <h2 class="vh">Cabeceo · adelante / atrás</h2>
+      <svg class="dial" id="dial-p" viewBox="-110 -110 220 220" aria-label="Cabeceo de la mano"></svg>
+      <p class="dial-v"><span id="gl-p">—</span><small>°</small></p>
+    </div>
+    <div class="panel dial-panel">
+      <h2 class="vh">Alabeo · izquierda / derecha</h2>
+      <svg class="dial" id="dial-r" viewBox="-110 -110 220 220" aria-label="Alabeo de la mano"></svg>
+      <p class="dial-v"><span id="gl-r">—</span><small>°</small></p>
+    </div>
+    <div class="panel glove-out">
+      <h2 class="vh">Orden que envía</h2>
+      <div class="vec"><svg id="vec" viewBox="-100 -100 200 200" aria-label="Vector de la orden"></svg></div>
+      <dl class="kv">
+        <div><dt>Avance</dt><dd><span id="gl-v">—</span> cm/s</dd></div>
+        <div><dt>Giro</dt><dd><span id="gl-w">—</span> rad/s</dd></div>
+        <div><dt>Paquetes</dt><dd><span id="gl-rate">—</span> /s</dd></div>
+      </dl>
+      <p class="hint">Zona muerta de 8° adelante y 12° de lado; a 30° va a la velocidad máxima. Para fijar el cero, deja la mano en reposo y presiona <b>BOOT</b> en el guante.</p>
+    </div>
+    <div class="panel glove-plot">
+      <h2 class="vh">Ángulos de la mano: crudo y Kalman</h2>
+      <p class="hint legend"><span><i style="background:var(--tawara);opacity:.55"></i>crudo</span><span><i style="background:var(--fusa)"></i>Kalman</span><span><i class="lg-solid"></i>cabeceo: línea continua</span><span><i class="lg-dash"></i>alabeo: línea punteada</span></p>
+      <canvas id="gl-plot" height="180"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SISTEMA ============ -->
+<section class="view view-sistema" id="v-sistema" aria-label="Sistema" hidden>
+  <div class="sys-grid">
+    <div class="panel">
+      <h2 class="vh">Enlaces</h2>
+      <table class="tbl">
+        <thead><tr><th scope="col">Enlace</th><th scope="col">Estado</th><th scope="col" class="num">Tasa</th><th scope="col" class="num">Último dato</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Panel ↔ ROS2</th><td id="s-ws">—</td><td class="num" id="s-ws-r">—</td><td class="num">—</td></tr>
+          <tr><th scope="row">Robot (telemetría)</th><td id="s-rb">—</td><td class="num" id="s-rb-r">—</td><td class="num" id="s-rb-a">—</td></tr>
+          <tr><th scope="row">Guante</th><td id="s-gl">—</td><td class="num" id="s-gl-r">—</td><td class="num" id="s-gl-a">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2 class="vh">Batería en la sesión</h2>
+      <canvas id="bat-plot" height="160"></canvas>
+      <p class="hint">Verde por encima de 7,0 V · ámbar hasta 6,6 V · rojo por debajo: carga la 2S.</p>
+    </div>
+    <div class="panel">
+      <h2 class="vh">Robot</h2>
+      <dl class="kv kv-cols">
+        <div><dt>Radio de rueda</dt><dd>16,2 mm</dd></div>
+        <div><dt>Entre ruedas</dt><dd>79 mm</dd></div>
+        <div><dt>Encoder</dt><dd>2771 cuentas/vuelta</dd></div>
+        <div><dt>Rueda máx.</dt><dd>13,5 rad/s</dd></div>
+        <div><dt>Lazo de control</dt><dd>200 Hz</dd></div>
+        <div><dt>Ticks izq / der</dt><dd><span id="s-ticks">—</span></dd></div>
+      </dl>
+    </div>
+    <div class="panel">
+      <h2 class="vh">Abrir en otro equipo</h2>
+      <p class="url" id="s-url">—</p>
+      <p class="hint">Desde Windows o el celular en la misma red WiFi. Atajos: <kbd>Espacio</kbd> parar · <kbd>1</kbd>–<kbd>5</kbd> secciones · <kbd>R</kbd> odometría (con Mayús) · <kbd>W A S D</kbd> manejo en Control.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

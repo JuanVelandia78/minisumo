@@ -1,4 +1,5 @@
-// Motores con TB6612FNG: PWM por LEDC y dos pines de dirección por motor
+// Motores con DRV8833: el PWM (LEDC) se aplica directo en los pines IN1/IN2 de cada puente
+// y el pin STBY (nSLEEP) habilita el driver.
 #pragma once
 
 void motors_init(void);

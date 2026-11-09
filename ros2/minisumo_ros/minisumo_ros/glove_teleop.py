@@ -31,8 +31,8 @@ class GloveTeleop(Node):
     def __init__(self):
         super().__init__('glove_teleop')
         self.declare_parameter('port', 8890)
-        self.declare_parameter('v_max', 0.25)          # m/s con la mano totalmente inclinada
-        self.declare_parameter('w_max', 4.0)           # rad/s de giro con la mano totalmente inclinada
+        self.declare_parameter('v_max', 0.18)          # m/s con la mano totalmente inclinada (techo del robot ~0,19)
+        self.declare_parameter('w_max', 3.0)           # rad/s de giro con la mano totalmente inclinada
         self.declare_parameter('deadzone_deg', 8.0)    # inclinación que se ignora
         self.declare_parameter('roll_deadzone_deg', 12.0)  # zona muerta del giro: en reposo la mano
                                                            # suele quedar algo ladeada

@@ -6,7 +6,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
-from std_msgs.msg import String, Float32MultiArray
+from std_msgs.msg import String, Float32MultiArray, Bool
 from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
 
@@ -22,8 +22,8 @@ class RobotBridge(Node):
         self.declare_parameter('beacon_port', 8889)
         self.declare_parameter('send_rate', 50.0)       # Hz de envío de comandos
         self.declare_parameter('cmd_timeout', 0.5)      # s sin /wheel_cmd -> detener
-        self.declare_parameter('wheel_radius', 0.0325)
-        self.declare_parameter('wheel_base', 0.085)
+        self.declare_parameter('wheel_radius', 0.0162)
+        self.declare_parameter('wheel_base', 0.079)
 
         self.robot_ip = self.get_parameter('robot_ip').value or None
         self.cmd_port = self.get_parameter('cmd_port').value
@@ -51,12 +51,16 @@ class RobotBridge(Node):
 
         self.create_subscription(Float32MultiArray, 'wheel_cmd', self.on_wheel_cmd, 10)
         self.create_subscription(String, 'robot_cmd', self.on_robot_cmd, 10)
+        # Parada de emergencia (panel web): mientras sea True se envía S aunque llegue /wheel_cmd
+        self.create_subscription(Bool, 'estop', self.on_estop, 10)
+        self.estop = False
 
         self.wheel = (0.0, 0.0)
         self.wheel_t = 0.0
         self.cols = None
         self.idx = {}
         self.last_h = 0.0
+        self.t_line = 0.0
         self.n_lines = 0
 
         self.create_timer(1.0 / self.get_parameter('send_rate').value, self.send_tick)
@@ -74,12 +78,19 @@ class RobotBridge(Node):
             try:
                 self.sock.sendto(txt.encode(), (self.robot_ip, self.cmd_port))
             except OSError as e:
-                self.get_logger().warn(f'No se pudo enviar: {e}')
+                self.get_logger().warning(f'No se pudo enviar: {e}')
 
     def on_wheel_cmd(self, msg):
         if len(msg.data) >= 2:
             self.wheel = (float(msg.data[0]), float(msg.data[1]))
             self.wheel_t = time.monotonic()
+
+    def on_estop(self, msg):
+        if bool(msg.data) != self.estop:
+            self.estop = bool(msg.data)
+            self.get_logger().warning('PARADA DE EMERGENCIA activada' if self.estop else 'Parada de emergencia liberada')
+            if self.estop:
+                self.send('S')
 
     def on_robot_cmd(self, msg):
         self.send(msg.data.strip())
@@ -92,7 +103,9 @@ class RobotBridge(Node):
         if self.cols is None and now - self.last_h > 1.0:
             self.send('H')
             self.last_h = now
-        if now - self.wheel_t < self.cmd_timeout:
+        if self.estop:
+            self.send('S')
+        elif now - self.wheel_t < self.cmd_timeout:
             self.send(f'W,{self.wheel[0]:.3f},{self.wheel[1]:.3f}')
         else:
             self.send('S')
@@ -105,9 +118,16 @@ class RobotBridge(Node):
             except BlockingIOError:
                 break
             msg = data.decode(errors='ignore')
-            if msg.startswith('MINISUMO,') and self.robot_ip is None:
-                self.robot_ip = msg.split(',')[1]
-                self.get_logger().info(f'Robot encontrado en {self.robot_ip}')
+            if msg.startswith('MINISUMO,'):
+                ip = msg.split(',')[1]
+                if self.robot_ip is None:
+                    self.robot_ip = ip
+                    self.get_logger().info(f'Robot encontrado en {ip}')
+                elif ip != self.robot_ip and time.monotonic() - self.t_line > 2.0:
+                    # El robot cambió de red (router <-> su red CAR-LOSS): se sigue a la IP nueva
+                    self.get_logger().warning(f'El robot ahora está en {ip} (antes {self.robot_ip})')
+                    self.robot_ip = ip
+                    self.cols = None
         while True:
             try:
                 data, _ = self.sock.recvfrom(4096)
@@ -129,6 +149,7 @@ class RobotBridge(Node):
         if len(vals) != len(self.cols):
             return
         self.n_lines += 1
+        self.t_line = time.monotonic()
         self.pub_telem.publish(String(data=line[2:]))
 
         def f(c):
